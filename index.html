@@ -922,11 +922,16 @@
         }
         // Lengths in quarter notes
         entry.beatLen = 4 / beatType;
+        entry.barLen = beats * 4 / beatType;
         entry.length = Math.max(entry.length, maxTime / divisions, 0.0001);
       });
     });
     let start = 0;
     measures.forEach(m => { m.start = start; start += m.length; });
+    // A short first measure is a pickup: its notes are the last beats of a bar,
+    // so number them from the end (Bella Ciao's two eighths are beats 4 and 4.5)
+    const first = measures[0];
+    if (first && first.length < first.barLen - 1e-6) first.beatOffset = first.barLen - first.length;
     return { title, measures, tempo };
   }
 
@@ -1228,7 +1233,7 @@
 
   function updatePlayFrom() {
     const m = xmlMeasures[playFrom];
-    const beat = m ? (playFromPos - m.start) / m.beatLen + 1 : 1;
+    const beat = m ? beatOf(m, playFromPos) : 1;
     $("play-from").textContent = m ? `Starts from m${m.number}${beat > 1.001 ? ", beat " + +beat.toFixed(2) : ""}` : "";
     document.querySelectorAll(".measure").forEach(x => x.classList.toggle("start", +x.dataset.measure === playFrom));
     if (!playing && m) moveCursor(playFromPos);
@@ -1293,11 +1298,13 @@
       : pos >= m.start - 1e-6 && pos < m.start + m.length - 1e-6);
   }
 
+  const beatOf = (m, pos) => (pos - m.start + (m.beatOffset || 0)) / m.beatLen + 1;
+
   function fmtPos(pos, isEnd = false) {
     const m = xmlMeasures[measureAt(pos, isEnd)];
     if (!m) return "?";
     if (isEnd && Math.abs(pos - m.start - m.length) < 1e-6) return `end of m${m.number}`;
-    const beat = (pos - m.start) / m.beatLen + 1;
+    const beat = beatOf(m, pos);
     return beat > 1.001 ? `m${m.number} beat ${+beat.toFixed(2)}` : `m${m.number}`;
   }
 
