@@ -218,13 +218,13 @@
   .loop-info { font-size: 0.85rem; color: var(--play); font-weight: 600; white-space: nowrap; margin-left: 4px; }
   .loop-info:empty { display: none; }
 
-  .segment { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--bg); }
-  .segment button {
-    border: none; background: transparent; padding: 4px 9px; border-radius: 7px;
-    font-size: 0.8rem; font-weight: 600; color: var(--muted);
-  }
-  .segment button.active { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
-  .practice.wait-off .segment, .practice.wait-off .octave { opacity: 0.45; }
+  .practice-hands { display: inline-flex; gap: 2px; }
+  .practise-btn { color: var(--muted); }
+  .practise-btn.active { background: var(--accent-soft); color: var(--accent); }
+  .practice.wait-off .practice-hands, .practice.wait-off .octave { opacity: 0.45; }
+  /* A hand you are practising is never auto-played, so its sound button is locked */
+  .toggle.locked { opacity: 0.35; cursor: not-allowed; }
+  .toggle.locked input:checked ~ .bg { background: transparent; }
 
   /* Pop-out sliders (open on hover, or on click for touch) */
   .pop { position: relative; }
@@ -430,11 +430,11 @@
     <div class="divider"></div>
 
     <div class="group">
-      <label class="icon-btn toggle hand" data-tip="Left hand sound on/off (muted hands still light up their keys)">
-        <input type="checkbox" id="lh" checked><span class="ic mirror" data-ic="hand"></span><b>L</b>
+      <label class="icon-btn toggle hand sound-toggle" data-hand="L" data-tip-on="Left hand sound on/off (muted hands still light up their keys)">
+        <input type="checkbox" id="lh" checked><span class="ic" data-ic="speaker-high"></span><b>L</b>
       </label>
-      <label class="icon-btn toggle hand" data-tip="Right hand sound on/off (muted hands still light up their keys)">
-        <input type="checkbox" id="rh" checked><span class="ic" data-ic="hand"></span><b>R</b>
+      <label class="icon-btn toggle hand sound-toggle" data-hand="R" data-tip-on="Right hand sound on/off (muted hands still light up their keys)">
+        <input type="checkbox" id="rh" checked><span class="ic" data-ic="speaker-high"></span><b>R</b>
       </label>
     </div>
 
@@ -444,10 +444,9 @@
       <label class="icon-btn toggle" data-tip="Wait for me: playback stops at each note until you play it (MIDI or on-screen keys)">
         <input type="checkbox" id="wait"><span class="ic" data-ic="hourglass"></span>
       </label>
-      <div class="segment" id="practice-seg">
-        <button data-hand="RL" data-tip="Practise both hands">Both</button>
-        <button data-hand="L" data-tip="Practise the left hand (the right hand plays itself)">L</button>
-        <button data-hand="R" data-tip="Practise the right hand (the left hand plays itself)">R</button>
+      <div class="practice-hands" id="practice-hands">
+        <button class="icon-btn hand practise-btn" data-hand="L" data-tip="Practise the left hand: Wait mode waits for your left-hand notes. Light both hands to practise both"><span class="ic mirror" data-ic="hand"></span><b>L</b></button>
+        <button class="icon-btn hand practise-btn" data-hand="R" data-tip="Practise the right hand: Wait mode waits for your right-hand notes. Light both hands to practise both"><span class="ic" data-ic="hand"></span><b>R</b></button>
       </div>
       <select id="practice-hand" hidden>
         <option value="RL">both</option>
@@ -1401,7 +1400,7 @@
   function updatePlayFrom() {
     const m = xmlMeasures[playFrom];
     const beat = m ? beatOf(m, playFromPos) : 1;
-    $("play-from").textContent = m ? `m${m.number}${beat > 1.001 ? " beat " + +beat.toFixed(2) : ""}` : "";
+    $("play-from").textContent = m ? `m${m.number}/b${+beat.toFixed(2)}` : "";
     document.querySelectorAll(".measure").forEach(x => x.classList.toggle("start", +x.dataset.measure === playFrom));
     if (!playing && m) moveCursor(playFromPos);
     drawScoreMarks();
@@ -1471,7 +1470,7 @@
     if (!m) return "?";
     if (isEnd && Math.abs(pos - m.start - m.length) < 1e-6) return `end of m${m.number}`;
     const beat = beatOf(m, pos);
-    return beat > 1.001 ? `m${m.number} beat ${+beat.toFixed(2)}` : `m${m.number}`;
+    return `m${m.number}/b${+beat.toFixed(2)}`;
   }
 
   function setPickMode(mode) {
@@ -1882,16 +1881,30 @@
   }
   $("volume").addEventListener("input", updateVolumeIcon);
 
-  // Practice hand: segmented buttons drive the hidden select
-  function syncPracticeSeg() {
-    document.querySelectorAll("#practice-seg button").forEach(b => b.classList.toggle("active", b.dataset.hand === $("practice-hand").value));
+  // Practice hands: each hand button toggles; both lit = both hands. One always stays lit.
+  function syncHands() {
+    const practised = $("practice-hand").value;
+    document.querySelectorAll(".practise-btn").forEach(b => b.classList.toggle("active", practised.includes(b.dataset.hand)));
+    // Sound buttons: speaker or crossed speaker, locked for hands you play yourself in Wait mode
+    document.querySelectorAll(".sound-toggle").forEach(t => {
+      const input = t.querySelector("input");
+      const locked = $("wait").checked && practised.includes(t.dataset.hand);
+      input.disabled = locked;
+      t.classList.toggle("locked", locked);
+      t.dataset.tip = locked ? "You're playing this hand manually via Wait mode" : t.dataset.tipOn;
+      setIcon(t.querySelector(".ic"), input.checked ? "speaker-high" : "speaker-x");
+    });
+    if (tipFor) showTip(tipFor);
   }
-  document.querySelectorAll("#practice-seg button").forEach(b => b.addEventListener("click", () => {
-    $("practice-hand").value = b.dataset.hand;
+  document.querySelectorAll(".practise-btn").forEach(b => b.addEventListener("click", () => {
+    const hands = new Set($("practice-hand").value.split(""));
+    if (hands.has(b.dataset.hand)) { if (hands.size === 1) return; hands.delete(b.dataset.hand); }
+    else hands.add(b.dataset.hand);
+    $("practice-hand").value = hands.size === 2 ? "RL" : [...hands][0];
     $("practice-hand").dispatchEvent(new Event("change"));
-    syncPracticeSeg();
   }));
-  syncPracticeSeg();
+  ["practice-hand", "wait", "lh", "rh"].forEach(id => $(id).addEventListener("change", syncHands));
+  syncHands();
 
   function setPlayState(state) {
     const btn = $("xml-play");
