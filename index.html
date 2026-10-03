@@ -140,6 +140,12 @@
   .measure.now { background: var(--accent-soft); }
   .chip.now { background: var(--play); color: #fff; }
   .player { margin-top: 12px; }
+  /* Score is always drawn on white paper, also in dark mode */
+  .score {
+    margin-top: 12px; max-height: 460px; overflow: auto; position: relative;
+    background: #fff; border-radius: 8px; border: 1px solid var(--border);
+  }
+  .score[hidden] { display: none; }
   .player input[type=range] { width: 140px; }
   @media (max-width: 600px) {
     .degree-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -242,6 +248,7 @@
         <label><input type="checkbox" id="lh" checked> Left hand sound</label>
         <span class="status" id="play-from"></span>
       </div>
+      <div class="score" id="score" hidden></div>
       <p class="status">Uncompressed MusicXML only (.musicxml / .xml, not .mxl). Click a chord to see it on the piano;
         the actual notes in that part of the music turn green. Click a measure to play from there.
         Muted hands still light up their keys (orange) so you can play along.</p>
@@ -252,6 +259,7 @@
 
 <script src="tonal.min.js"></script>
 <script src="piano-samples.js"></script>
+<script src="opensheetmusicdisplay.min.js"></script>
 <script>
   const { Chord, Scale, Note } = Tonal;
 
@@ -932,7 +940,8 @@
     const file = e.target.files[0];
     if (!file) return;
     try {
-      const parsed = parseMusicXML(await file.text());
+      const text = await file.text();
+      const parsed = parseMusicXML(text);
       xmlTitle = parsed.title;
       xmlMeasures = parsed.measures;
       stopPlayback();
@@ -942,6 +951,7 @@
       $("player").hidden = false;
       renderSheet();
       updatePlayFrom();
+      await renderScore(text);
     } catch (err) {
       $("xml-info").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
     }
@@ -1027,6 +1037,7 @@
     $("xml-play").textContent = "Pause";
     schedTimer = setInterval(schedule, 25);
     schedule();
+    moveCursor(fromPos);
     rafId = requestAnimationFrame(tick);
   }
 
@@ -1094,6 +1105,7 @@
     const key = [...now].join(",");
     if (key !== [...playingMidis].join(",")) { playingMidis = now; renderKeys(); }
     markNow(pos);
+    moveCursor(pos);
     rafId = requestAnimationFrame(tick);
   }
 
@@ -1119,6 +1131,7 @@
     const m = xmlMeasures[playFrom];
     $("play-from").textContent = m ? `Starts from m${m.number}` : "";
     document.querySelectorAll(".measure").forEach(x => x.classList.toggle("start", +x.dataset.measure === playFrom));
+    if (!playing && m) moveCursor(m.start);
   }
 
   $("xml-play").addEventListener("click", () => {
@@ -1138,6 +1151,77 @@
     updatePlayFrom();
     if (playing) { haltAudio(); startAt(xmlMeasures[playFrom].start); }
     else if (pausedAt !== null) pausedAt = xmlMeasures[playFrom].start;
+  });
+
+
+  // ---------- Score display (OpenSheetMusicDisplay) with playhead ----------
+  let osmd = null;
+  let cursorTimes = []; // quarter-note position of each cursor step
+  let cursorIdx = -1;
+
+  async function renderScore(text) {
+    const el = $("score");
+    el.innerHTML = "";
+    cursorTimes = [];
+    cursorIdx = -1;
+    if (!window.opensheetmusicdisplay) return;
+    // Must be visible before OSMD measures the container width
+    el.hidden = false;
+    osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(el, {
+      backend: "svg", autoResize: true, drawTitle: true, followCursor: false,
+      cursorsOptions: [{ type: 0, color: "#ee8a1f", alpha: 0.55, follow: false }],
+    });
+    await osmd.load(text);
+    osmd.render();
+    indexCursor();
+    moveCursor(xmlMeasures[playFrom]?.start || 0);
+  }
+
+  // Walk the cursor once through the piece to record when each step happens
+  function indexCursor() {
+    const c = osmd.cursor;
+    c.show();
+    c.reset();
+    cursorTimes = [];
+    while (!c.Iterator.EndReached) {
+      cursorTimes.push(c.Iterator.currentTimeStamp.RealValue * 4);
+      c.next();
+    }
+    c.reset();
+    cursorIdx = 0;
+  }
+
+  function moveCursor(pos) {
+    if (!osmd || !cursorTimes.length) return;
+    // Last cursor step at or before pos
+    let target = 0;
+    while (target + 1 < cursorTimes.length && cursorTimes[target + 1] <= pos + 1e-6) target++;
+    if (target === cursorIdx) return;
+    const c = osmd.cursor;
+    if (target < cursorIdx) { c.reset(); cursorIdx = 0; }
+    while (cursorIdx < target) { c.next(); cursorIdx++; }
+    scrollToCursor();
+  }
+
+  // Keep the playhead in view inside the score box (without scrolling the whole page)
+  function scrollToCursor() {
+    const box = $("score"), cur = osmd.cursor.cursorElement;
+    if (!cur) return;
+    const top = cur.offsetTop, h = cur.offsetHeight || 80;
+    if (top < box.scrollTop || top + h > box.scrollTop + box.clientHeight) {
+      box.scrollTo({ top: Math.max(0, top - 20), behavior: "smooth" });
+    }
+  }
+
+  // autoResize re-renders the score on window resize, which resets the cursor
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (!osmd) return;
+      indexCursor();
+      moveCursor(playing ? position() : (xmlMeasures[playFrom]?.start || 0));
+    }, 400);
   });
 
   // ---------- MIDI input ----------
