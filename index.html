@@ -162,6 +162,16 @@
   .loop-box { position: absolute; background: rgba(238, 138, 31, 0.16); border-radius: 4px; pointer-events: none; }
   .loop-box.pending { background: rgba(47, 111, 222, 0.14); }
   .start-mark { position: absolute; width: 3px; border-radius: 2px; background: var(--accent); pointer-events: none; }
+  /* Hover indicator: the note a click would land on */
+  .hover-mark {
+    position: absolute; width: 2px; border-radius: 1px; pointer-events: none;
+    background: rgba(238, 138, 31, 0.8); display: none;
+  }
+  .hover-mark span {
+    position: absolute; bottom: 100%; left: 50%; transform: translate(-50%, -2px);
+    font: 600 11px/1.3 system-ui, sans-serif; white-space: nowrap;
+    background: #ee8a1f; color: #fff; padding: 1px 6px; border-radius: 4px;
+  }
   .measure.inloop { background: rgba(238, 138, 31, 0.14); }
   .measure.pending { background: rgba(47, 111, 222, 0.14); }
   .picking .measure, .picking.score { cursor: pointer; }
@@ -1502,17 +1512,44 @@
     }
   }
 
-  $("score").addEventListener("click", e => {
+  // Which measure and nearest note column a mouse event is over
+  function scoreHit(e) {
     const boxes = measureBoxes();
     const br = $("score").getBoundingClientRect();
     const x = e.clientX - br.left + $("score").scrollLeft, y = e.clientY - br.top + $("score").scrollTop;
     const idx = boxes.findIndex(b => b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
-    if (idx === -1) return;
-    // Snap to the nearest note column (loops stay measure-based)
+    if (idx === -1) return null;
     const cols = noteColumns(idx);
     const near = cols.reduce((a, c) => (!a || Math.abs(c.x - x) < Math.abs(a.x - x) ? c : a), null);
-    handleMeasureClick(idx, near ? xmlMeasures[idx].start + near.rel : null);
+    return { idx, box: boxes[idx], col: near, pos: near ? xmlMeasures[idx].start + near.rel : null };
+  }
+
+  $("score").addEventListener("click", e => {
+    const hit = scoreHit(e);
+    if (hit) handleMeasureClick(hit.idx, hit.pos);
   });
+
+  // Hover indicator showing the note a click would snap to
+  let hoverEl = null, hoverFrame = null;
+  $("score").addEventListener("mousemove", e => {
+    if (hoverFrame) return;
+    hoverFrame = requestAnimationFrame(() => {
+      hoverFrame = null;
+      const hit = scoreHit(e);
+      if (!hoverEl || !hoverEl.isConnected) {
+        hoverEl = document.createElement("div");
+        hoverEl.className = "hover-mark";
+        hoverEl.innerHTML = "<span></span>";
+        $("score").appendChild(hoverEl);
+      }
+      if (!hit || !hit.col) { hoverEl.style.display = "none"; return; }
+      Object.assign(hoverEl.style, {
+        display: "block", left: (hit.col.x - 6) + "px", top: hit.box.y + "px", height: hit.box.h + "px",
+      });
+      hoverEl.firstChild.textContent = fmtPos(hit.pos);
+    });
+  });
+  $("score").addEventListener("mouseleave", () => { if (hoverEl) hoverEl.style.display = "none"; });
 
 
   // ---------- Wait mode (practice) ----------
