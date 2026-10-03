@@ -19,6 +19,7 @@
     --white-key: #ffffff;
     --black-key: #1f1f22;
     --key-on: #2f6fde;
+    --play: #ee8a1f;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -79,6 +80,8 @@
   .key.white.on, .key.black.on { background: var(--key-on); border-color: var(--key-on); }
   .key.on.hl { box-shadow: inset 0 -10px 0 var(--hl); }
   .key.pressed { filter: brightness(0.8); }
+  .key.white.playing, .key.black.playing { background: var(--play); border-color: var(--play); }
+  .key.playing .lbl { color: #fff; font-weight: 600; }
   .key.on.hl.tonic { box-shadow: inset 0 -10px 0 var(--hl-strong); }
   .key .lbl {
     position: absolute; bottom: 8px; left: 0; right: 0; text-align: center;
@@ -132,6 +135,12 @@
   .measure { border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
   .measure .mnum { font-size: 0.75rem; color: var(--muted); }
   .measure .chips { gap: 4px; }
+  .measure { cursor: pointer; }
+  .measure.start { border-color: var(--accent); }
+  .measure.now { background: var(--accent-soft); }
+  .chip.now { background: var(--play); color: #fff; }
+  .player { margin-top: 12px; }
+  .player input[type=range] { width: 140px; }
   @media (max-width: 600px) {
     .degree-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   }
@@ -216,8 +225,18 @@
           </select>
         </label>
       </div>
+      <div class="row player" id="player" hidden>
+        <button id="xml-play">Play</button>
+        <button id="xml-stop">Stop</button>
+        <label>Tempo <input type="range" id="tempo" min="30" max="220" value="100"> <span id="tempo-val">100</span> BPM</label>
+        <label><input type="checkbox" id="loop"> Loop</label>
+        <label><input type="checkbox" id="rh" checked> Right hand sound</label>
+        <label><input type="checkbox" id="lh" checked> Left hand sound</label>
+        <span class="status" id="play-from"></span>
+      </div>
       <p class="status">Uncompressed MusicXML only (.musicxml / .xml, not .mxl). Click a chord to see it on the piano;
-        the actual notes in that part of the music turn green.</p>
+        the actual notes in that part of the music turn green. Click a measure to play from there.
+        Muted hands still light up their keys (orange) so you can play along.</p>
       <div id="xml-info"></div>
     </div>
   </div>
@@ -279,6 +298,7 @@
 
   // ---------- State ----------
   const selected = new Set();
+  let playingMidis = new Set(); // keys sounding during sheet music playback
   let overlay = null; // { label, pcs: Set<chroma> | null, midis: Set<midi> | null, tonic: chroma | null }
 
   const $ = id => document.getElementById(id);
@@ -340,29 +360,52 @@
 
   // ---------- Sound ----------
   let ctx;
+  const audio = () => (ctx = ctx || new (window.AudioContext || window.webkitAudioContext)());
+
+  // One synth note. With hold, the note sustains for `dur` seconds then releases;
+  // without, it just decays like a plucked string.
+  function tone(midi, t, vol, dur = null) {
+    const freq = 440 * Math.pow(2, (midi - 69) / 12);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(vol, t + 0.01);
+    let end;
+    if (dur === null) {
+      end = t + 1.6;
+      gain.gain.exponentialRampToValueAtTime(0.001, end);
+    } else {
+      end = t + dur + 0.15;
+      gain.gain.exponentialRampToValueAtTime(vol * 0.35, t + Math.max(0.02, dur));
+      gain.gain.exponentialRampToValueAtTime(0.001, end);
+    }
+    gain.connect(ctx.destination);
+    const oscs = ["triangle", "sine"].map((type, j) => {
+      const osc = ctx.createOscillator();
+      osc.type = type;
+      osc.frequency.value = freq * (j + 1);
+      const g = ctx.createGain();
+      g.gain.value = j ? 0.3 : 1;
+      osc.connect(g).connect(gain);
+      osc.start(t);
+      osc.stop(end + 0.05);
+      return osc;
+    });
+    return { gain, oscs, end };
+  }
+
+  function silence(voice) {
+    const now = ctx.currentTime;
+    voice.gain.gain.cancelScheduledValues(now);
+    voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
+    voice.gain.gain.linearRampToValueAtTime(0, now + 0.04);
+    voice.oscs.forEach(o => { try { o.stop(now + 0.05); } catch (e) {} });
+  }
+
   function playNotes(midis, force = false) {
     if ((!soundEl.checked && !force) || !midis.length) return;
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    audio();
     const now = ctx.currentTime;
-    midis.forEach((m, i) => {
-      const t = now + i * 0.04;
-      const freq = 440 * Math.pow(2, (m - 69) / 12);
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(0.25 / Math.max(1, midis.length * 0.6), t + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 1.6);
-      gain.connect(ctx.destination);
-      ["triangle", "sine"].forEach((type, j) => {
-        const osc = ctx.createOscillator();
-        osc.type = type;
-        osc.frequency.value = freq * (j + 1);
-        const g = ctx.createGain();
-        g.gain.value = j ? 0.3 : 1;
-        osc.connect(g).connect(gain);
-        osc.start(t);
-        osc.stop(t + 1.7);
-      });
-    });
+    midis.forEach((m, i) => tone(m, now + i * 0.04, 0.25 / Math.max(1, midis.length * 0.6)));
   }
 
   // ---------- Theory helpers ----------
@@ -454,7 +497,11 @@
   }
 
   function render() {
-    // Piano
+    renderKeys();
+    renderResult();
+  }
+
+  function renderKeys() {
     for (const [mStr, el] of Object.entries(keyEls)) {
       const m = +mStr;
       const on = selected.has(m);
@@ -469,15 +516,15 @@
       el.classList.toggle("on", on);
       el.classList.toggle("hl", hl);
       el.classList.toggle("tonic", tonic);
+      const playing = playingMidis.has(m);
+      el.classList.toggle("playing", playing);
       let label = "";
-      if (on || hl) label = pc(m);
+      if (on || hl || playing) label = pc(m);
       else if (m % 12 === 0) label = "C" + octaveOf(m);
       el.querySelector(".lbl").textContent = label;
     }
     $("overlay-bar").classList.toggle("show", !!overlay);
     $("overlay-label").textContent = overlay ? "Highlighted: " + overlay.label : "";
-
-    renderResult();
   }
 
   let lastInversions = null;
@@ -689,9 +736,11 @@
     const doc = new DOMParser().parseFromString(text, "application/xml");
     if (doc.querySelector("parsererror")) throw new Error("Could not read this file as XML");
     const title = doc.querySelector("work-title, movement-title")?.textContent || "Untitled";
-    const measures = []; // index -> { number, length, notes: [{midi, onset, dur}] }
+    const measures = []; // index -> { number, start, length, notes: [{midi, onset, dur, hand, tieStop}] }
+    const tempoEl = doc.querySelector("sound[tempo]");
+    const tempo = tempoEl ? +tempoEl.getAttribute("tempo") : +(doc.querySelector("metronome per-minute")?.textContent || 0) || null;
 
-    for (const part of doc.querySelectorAll("part")) {
+    [...doc.querySelectorAll("part")].forEach((part, partIdx) => {
       let divisions = 1, beats = 4, beatType = 4;
       [...part.querySelectorAll(":scope > measure")].forEach((meas, idx) => {
         const entry = measures[idx] || (measures[idx] = { number: meas.getAttribute("number"), length: 0, beatLen: 0, notes: [] });
@@ -719,7 +768,13 @@
               const step = p.querySelector("step").textContent;
               const alter = +(p.querySelector("alter")?.textContent || 0);
               const octave = +p.querySelector("octave").textContent;
-              entry.notes.push({ midi: (octave + 1) * 12 + STEP_SEMIS[step] + alter, onset: onset / divisions, dur: dur / divisions });
+              const staff = +(el.querySelector("staff")?.textContent || 1);
+              entry.notes.push({
+                midi: (octave + 1) * 12 + STEP_SEMIS[step] + alter, onset: onset / divisions, dur: dur / divisions,
+                // First part's top staff is the right hand; everything else counts as left
+                hand: partIdx === 0 && staff === 1 ? "R" : "L",
+                tieStop: !!el.querySelector('tie[type="stop"]'),
+              });
             }
           }
           maxTime = Math.max(maxTime, time);
@@ -728,8 +783,10 @@
         entry.beatLen = 4 / beatType;
         entry.length = Math.max(entry.length, maxTime / divisions, 0.0001);
       });
-    }
-    return { title, measures };
+    });
+    let start = 0;
+    measures.forEach(m => { m.start = start; start += m.length; });
+    return { title, measures, tempo };
   }
 
   // Best-fit chord for a group of notes, weighted by duration
@@ -799,17 +856,18 @@
         const prev = segs[segs.length - 1];
         const sym = fit ? chordSymbol(fit.rootC, fit.type, fit.bassC) : null;
         // Merge repeated chords so a measure of Em reads "Em", not "Em Em"
-        if (prev && sym && prev.sym === sym) { prev.notes = prev.notes.concat(notes); continue; }
-        segs.push({ sym, fit, notes });
+        if (prev && sym && prev.sym === sym) { prev.notes = prev.notes.concat(notes); prev.end = (s + 1) * segLen; continue; }
+        segs.push({ sym, fit, notes, start: s * segLen, end: (s + 1) * segLen });
       }
-      html += `<div class="measure"><div class="mnum">m${esc(m.number)}</div><div class="chips">` +
+      html += `<div class="measure${idx === playFrom ? " start" : ""}" data-measure="${idx}"><div class="mnum">m${esc(m.number)}</div><div class="chips">` +
         segs.map((s, k) => s.sym
           ? chip(s.sym, `data-seg="${idx}|${k}"`)
-          : `<span class="chip">${s.notes.length ? [...new Set(s.notes.map(n => pc(n.midi)))].join(" ") : "rest"}</span>`).join("") +
+          : `<span class="chip" data-segi="${idx}|${k}">${s.notes.length ? [...new Set(s.notes.map(n => pc(n.midi)))].join(" ") : "rest"}</span>`).join("") +
         "</div></div>";
       m.segs = segs;
     });
     info.innerHTML = html + "</div>";
+    lastNow = null;
   }
 
   let xmlTitle = "";
@@ -820,7 +878,13 @@
       const parsed = parseMusicXML(await file.text());
       xmlTitle = parsed.title;
       xmlMeasures = parsed.measures;
+      stopPlayback();
+      playFrom = 0;
+      setTempo(parsed.tempo || 100);
+      buildTimeline();
+      $("player").hidden = false;
       renderSheet();
+      updatePlayFrom();
     } catch (err) {
       $("xml-info").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
     }
@@ -837,6 +901,170 @@
     const { rootC, type, bassC } = seg.fit;
     const k = bassC === null ? 0 : type.iv.findIndex(i => (rootC + i) % 12 === bassC);
     setSelection(voicing(rootC, type, k));
+  });
+
+
+  // ---------- Sheet music playback ----------
+  let timeline = [];       // notes with absolute onset/dur in quarter notes, ties merged
+  let totalLen = 0;
+  let playFrom = 0;        // measure index playback starts from
+  let tempo = 100;
+  let playing = false;
+  let anchorPos = 0, anchorTime = 0; // playhead position (quarters) at audio time anchorTime
+  let schedIdx = 0, schedTimer = null, rafId = null;
+  let voices = [];
+  let lastNow = null;
+
+  function buildTimeline() {
+    timeline = [];
+    const open = {}; // hand|midi -> note, for joining tied notes
+    for (const m of xmlMeasures) {
+      for (const n of [...m.notes].sort((a, b) => a.onset - b.onset)) {
+        const onset = m.start + n.onset, k = n.hand + "|" + n.midi;
+        const prev = open[k];
+        if (n.tieStop && prev && Math.abs(prev.onset + prev.dur - onset) < 1e-6) { prev.dur += n.dur; continue; }
+        const note = { midi: n.midi, onset, dur: n.dur, hand: n.hand };
+        timeline.push(note);
+        open[k] = note;
+      }
+    }
+    timeline.sort((a, b) => a.onset - b.onset);
+    const last = xmlMeasures[xmlMeasures.length - 1];
+    totalLen = last ? last.start + last.length : 0;
+  }
+
+  const secPerQ = () => 60 / tempo;
+  const position = () => anchorPos + (ctx.currentTime - anchorTime) / secPerQ();
+
+  function setTempo(bpm) {
+    if (playing) { anchorPos = position(); anchorTime = ctx.currentTime; }
+    tempo = Math.round(bpm);
+    $("tempo").value = tempo;
+    $("tempo-val").textContent = tempo;
+  }
+
+  function startPlayback(fromPos) {
+    audio();
+    if (ctx.state === "suspended") ctx.resume();
+    playing = true;
+    anchorPos = fromPos;
+    anchorTime = ctx.currentTime + 0.1;
+    schedIdx = timeline.findIndex(n => n.onset >= fromPos - 1e-6);
+    if (schedIdx === -1) schedIdx = timeline.length;
+    $("xml-play").textContent = "Pause";
+    schedTimer = setInterval(schedule, 25);
+    schedule();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  // Look-ahead scheduler: queue notes due in the next 150 ms on the audio clock
+  function schedule() {
+    const horizon = position() + 0.15 / secPerQ();
+    while (schedIdx < timeline.length && timeline[schedIdx].onset < horizon) {
+      const n = timeline[schedIdx++];
+      const muted = !$(n.hand === "R" ? "rh" : "lh").checked;
+      if (!muted) {
+        const t = anchorTime + (n.onset - anchorPos) * secPerQ();
+        voices.push(tone(n.midi, Math.max(t, ctx.currentTime), 0.16, n.dur * secPerQ() * 0.95));
+      }
+    }
+    const now = ctx.currentTime;
+    voices = voices.filter(v => v.end > now);
+    if (position() >= totalLen) {
+      if ($("loop").checked) { haltAudio(); startAt(xmlMeasures[playFrom].start); }
+      else stopPlayback();
+    }
+  }
+
+  function startAt(pos) {
+    clearInterval(schedTimer);
+    cancelAnimationFrame(rafId);
+    startPlayback(pos);
+  }
+
+  function haltAudio() {
+    voices.forEach(silence);
+    voices = [];
+  }
+
+  function pausePlayback() {
+    if (!playing) return;
+    pausedAt = position();
+    playing = false;
+    clearInterval(schedTimer);
+    cancelAnimationFrame(rafId);
+    haltAudio();
+    $("xml-play").textContent = "Resume";
+  }
+  let pausedAt = null;
+
+  function stopPlayback() {
+    const was = playing || pausedAt !== null;
+    playing = false;
+    pausedAt = null;
+    clearInterval(schedTimer);
+    cancelAnimationFrame(rafId);
+    if (ctx) haltAudio();
+    $("xml-play").textContent = "Play";
+    if (was) { playingMidis = new Set(); renderKeys(); markNow(null); }
+  }
+
+  // Visual update each frame: light up sounding keys and the current measure/chord
+  function tick() {
+    if (!playing) return;
+    const pos = position();
+    const now = new Set();
+    for (const n of timeline) {
+      if (n.onset > pos) break;
+      if (pos < n.onset + n.dur) now.add(n.midi);
+    }
+    const key = [...now].join(",");
+    if (key !== [...playingMidis].join(",")) { playingMidis = now; renderKeys(); }
+    markNow(pos);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function markNow(pos) {
+    let mi = -1, si = -1;
+    if (pos !== null && pos >= 0) {
+      mi = xmlMeasures.findIndex(m => pos >= m.start && pos < m.start + m.length);
+      if (mi !== -1) {
+        const rel = pos - xmlMeasures[mi].start;
+        si = (xmlMeasures[mi].segs || []).findIndex(sg => rel >= sg.start - 1e-6 && rel < sg.end - 1e-6);
+      }
+    }
+    const id = mi + "|" + si;
+    if (id === lastNow) return;
+    lastNow = id;
+    document.querySelectorAll(".measure.now, .chip.now").forEach(x => x.classList.remove("now"));
+    if (mi === -1) return;
+    document.querySelector(`[data-measure="${mi}"]`)?.classList.add("now");
+    document.querySelector(`[data-seg="${mi}|${si}"], [data-segi="${mi}|${si}"]`)?.classList.add("now");
+  }
+
+  function updatePlayFrom() {
+    const m = xmlMeasures[playFrom];
+    $("play-from").textContent = m ? `Starts from m${m.number}` : "";
+    document.querySelectorAll(".measure").forEach(x => x.classList.toggle("start", +x.dataset.measure === playFrom));
+  }
+
+  $("xml-play").addEventListener("click", () => {
+    if (!timeline.length) return;
+    if (playing) pausePlayback();
+    else if (pausedAt !== null) { const p = pausedAt; pausedAt = null; startPlayback(p); }
+    else startPlayback(xmlMeasures[playFrom].start);
+  });
+  $("xml-stop").addEventListener("click", stopPlayback);
+  $("tempo").addEventListener("input", e => setTempo(+e.target.value));
+
+  // Clicking a measure sets the start point (and jumps there if already playing)
+  document.addEventListener("click", e => {
+    const meas = e.target.closest("[data-measure]");
+    if (!meas) return;
+    playFrom = +meas.dataset.measure;
+    updatePlayFrom();
+    if (playing) { haltAudio(); startAt(xmlMeasures[playFrom].start); }
+    else if (pausedAt !== null) pausedAt = xmlMeasures[playFrom].start;
   });
 
   // ---------- MIDI input ----------
