@@ -229,6 +229,7 @@
         <button id="xml-play">Play</button>
         <button id="xml-stop">Stop</button>
         <label>Tempo <input type="range" id="tempo" min="30" max="220" value="100"> <span id="tempo-val">100</span> BPM</label>
+        <label>Volume <input type="range" id="volume" min="0" max="100" value="80"> <span id="volume-val">80</span>%</label>
         <label><input type="checkbox" id="loop"> Loop</label>
         <label><input type="checkbox" id="rh" checked> Right hand sound</label>
         <label><input type="checkbox" id="lh" checked> Left hand sound</label>
@@ -364,7 +365,7 @@
 
   // One synth note. With hold, the note sustains for `dur` seconds then releases;
   // without, it just decays like a plucked string.
-  function tone(midi, t, vol, dur = null) {
+  function tone(midi, t, vol, dur = null, dest = null) {
     const freq = 440 * Math.pow(2, (midi - 69) / 12);
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, t);
@@ -378,7 +379,7 @@
       gain.gain.exponentialRampToValueAtTime(vol * 0.35, t + Math.max(0.02, dur));
       gain.gain.exponentialRampToValueAtTime(0.001, end);
     }
-    gain.connect(ctx.destination);
+    gain.connect(dest || ctx.destination);
     const oscs = ["triangle", "sine"].map((type, j) => {
       const osc = ctx.createOscillator();
       osc.type = type;
@@ -933,6 +934,22 @@
     totalLen = last ? last.start + last.length : 0;
   }
 
+  // Playback goes through its own gain node so the volume slider works mid-song
+  let playbackGain = null;
+  const volumeLevel = () => 1.5 * Math.pow(+$("volume").value / 100, 2);
+  function playbackOut() {
+    if (!playbackGain) {
+      playbackGain = ctx.createGain();
+      playbackGain.gain.value = volumeLevel();
+      playbackGain.connect(ctx.destination);
+    }
+    return playbackGain;
+  }
+  $("volume").addEventListener("input", e => {
+    $("volume-val").textContent = e.target.value;
+    if (playbackGain) playbackGain.gain.setTargetAtTime(volumeLevel(), ctx.currentTime, 0.02);
+  });
+
   const secPerQ = () => 60 / tempo;
   const position = () => anchorPos + (ctx.currentTime - anchorTime) / secPerQ();
 
@@ -965,7 +982,7 @@
       const muted = !$(n.hand === "R" ? "rh" : "lh").checked;
       if (!muted) {
         const t = anchorTime + (n.onset - anchorPos) * secPerQ();
-        voices.push(tone(n.midi, Math.max(t, ctx.currentTime), 0.16, n.dur * secPerQ() * 0.95));
+        voices.push(tone(n.midi, Math.max(t, ctx.currentTime), 0.16, n.dur * secPerQ() * 0.95, playbackOut()));
       }
     }
     const now = ctx.currentTime;
