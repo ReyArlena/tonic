@@ -151,6 +151,14 @@
     background: #fff; border-radius: 8px; border: 1px solid var(--border);
   }
   .score[hidden] { display: none; }
+  .score { cursor: pointer; }
+  .loop-box { position: absolute; background: rgba(238, 138, 31, 0.16); border-radius: 4px; pointer-events: none; }
+  .loop-box.pending { background: rgba(47, 111, 222, 0.14); }
+  .start-mark { position: absolute; width: 3px; border-radius: 2px; background: var(--accent); pointer-events: none; }
+  .measure.inloop { background: rgba(238, 138, 31, 0.14); }
+  .measure.pending { background: rgba(47, 111, 222, 0.14); }
+  .picking .measure, .picking.score { cursor: crosshair; }
+  button.armed { border-color: var(--play); color: var(--play); font-weight: 600; }
   .player input[type=range] { width: 140px; }
   @media (max-width: 600px) {
     .degree-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -249,6 +257,9 @@
         <label>Tempo <input type="range" id="tempo" min="30" max="220" value="100"> <span id="tempo-val">100</span> BPM</label>
         <label>Volume <input type="range" id="volume" min="0" max="100" value="80"> <span id="volume-val">80</span>%</label>
         <label><input type="checkbox" id="loop"> Loop</label>
+        <button id="loop-set">Set loop</button>
+        <button id="loop-clear" hidden>Clear loop</button>
+        <span class="status" id="loop-info"></span>
         <label><input type="checkbox" id="rh" checked> Right hand sound</label>
         <label><input type="checkbox" id="lh" checked> Left hand sound</label>
         <span class="status" id="play-from"></span>
@@ -963,6 +974,7 @@
     });
     info.innerHTML = html + "</div>";
     lastNow = null;
+    if (typeof updateLoopMarks === "function" && xmlMeasures.length) updateLoopMarks();
   }
 
   let xmlTitle = "";
@@ -976,6 +988,8 @@
       xmlMeasures = parsed.measures;
       stopPlayback();
       playFrom = 0;
+      loopStart = loopEnd = pickFirst = null;
+      loopPick = null;
       setTempo(parsed.tempo || 100);
       buildTimeline();
       $("player").hidden = false;
@@ -989,7 +1003,7 @@
   $("xml-split").addEventListener("change", renderSheet);
   document.addEventListener("click", e => {
     const b = e.target.closest("[data-seg]");
-    if (!b) return;
+    if (!b || loopPick) return;
     const [mi, si] = b.dataset.seg.split("|").map(Number);
     const m = xmlMeasures[mi], seg = m.segs[si];
     document.querySelectorAll("[data-seg]").forEach(x => x.classList.toggle("active", x === b));
@@ -1074,7 +1088,9 @@
   // Look-ahead scheduler: queue notes due in the next 150 ms on the audio clock
   function schedule() {
     const horizon = position() + 0.15 / secPerQ();
-    while (schedIdx < timeline.length && timeline[schedIdx].onset < horizon) {
+    const range = loopRange();
+    const stopAt = range ? range.to : Infinity;
+    while (schedIdx < timeline.length && timeline[schedIdx].onset < horizon && timeline[schedIdx].onset < stopAt - 1e-6) {
       const n = timeline[schedIdx++];
       const muted = !$(n.hand === "R" ? "rh" : "lh").checked;
       if (!muted) {
@@ -1084,10 +1100,8 @@
     }
     const now = ctx.currentTime;
     voices = voices.filter(v => v.end > now);
-    if (position() >= totalLen) {
-      if ($("loop").checked) { haltAudio(); startAt(xmlMeasures[playFrom].start); }
-      else stopPlayback();
-    }
+    if (range && position() >= range.to) { haltAudio(); startAt(range.from); }
+    else if (!range && position() >= totalLen) stopPlayback();
   }
 
   function startAt(pos) {
@@ -1162,25 +1176,96 @@
     $("play-from").textContent = m ? `Starts from m${m.number}` : "";
     document.querySelectorAll(".measure").forEach(x => x.classList.toggle("start", +x.dataset.measure === playFrom));
     if (!playing && m) moveCursor(m.start);
+    drawScoreMarks();
   }
 
   $("xml-play").addEventListener("click", () => {
     if (!timeline.length) return;
     if (playing) pausePlayback();
     else if (pausedAt !== null) { const p = pausedAt; pausedAt = null; startPlayback(p); }
-    else startPlayback(xmlMeasures[playFrom].start);
+    else startPlayback(loopStart !== null && $("loop").checked ? xmlMeasures[loopStart].start : xmlMeasures[playFrom].start);
   });
   $("xml-stop").addEventListener("click", stopPlayback);
   $("tempo").addEventListener("input", e => setTempo(+e.target.value));
 
-  // Clicking a measure sets the start point (and jumps there if already playing)
-  document.addEventListener("click", e => {
-    const meas = e.target.closest("[data-measure]");
-    if (!meas) return;
-    playFrom = +meas.dataset.measure;
+  // Clicking a measure (chip grid or score) sets the start point and jumps there if playing.
+  // In "Set loop" mode the first click picks the loop start and the second its end.
+  function handleMeasureClick(idx) {
+    if (loopPick) { pickLoop(idx); return; }
+    playFrom = idx;
     updatePlayFrom();
     if (playing) { haltAudio(); startAt(xmlMeasures[playFrom].start); }
     else if (pausedAt !== null) pausedAt = xmlMeasures[playFrom].start;
+  }
+  document.addEventListener("click", e => {
+    const meas = e.target.closest("[data-measure]");
+    if (meas) handleMeasureClick(+meas.dataset.measure);
+  });
+
+  // ---------- Loop section ----------
+  let loopStart = null, loopEnd = null; // measure indices, inclusive
+  let loopPick = null;                  // null | "start" | "end"
+  let pickFirst = null;
+
+  // Section that playback repeats: the picked loop, or from the start point to the end
+  function loopRange() {
+    if (!$("loop").checked || !xmlMeasures.length) return null;
+    if (loopStart !== null) {
+      const e = xmlMeasures[loopEnd];
+      return { from: xmlMeasures[loopStart].start, to: e.start + e.length };
+    }
+    return { from: xmlMeasures[playFrom].start, to: totalLen };
+  }
+
+  function setPickMode(mode) {
+    loopPick = mode;
+    const btn = $("loop-set");
+    btn.classList.toggle("armed", !!mode);
+    btn.textContent = mode === "start" ? "Click start measure..." : mode === "end" ? "Click end measure..." : "Set loop";
+    $("tab-sheet").classList.toggle("picking", !!mode);
+    $("score").classList.toggle("picking", !!mode);
+    updateLoopMarks();
+  }
+
+  function pickLoop(idx) {
+    if (loopPick === "start") { pickFirst = idx; setPickMode("end"); return; }
+    loopStart = Math.min(pickFirst, idx);
+    loopEnd = Math.max(pickFirst, idx);
+    pickFirst = null;
+    $("loop").checked = true;
+    setPickMode(null);
+    if (playing) { haltAudio(); startAt(xmlMeasures[loopStart].start); }
+    else { playFrom = loopStart; updatePlayFrom(); pausedAt = null; $("xml-play").textContent = "Play"; }
+  }
+
+  function clearLoop() {
+    loopStart = loopEnd = pickFirst = null;
+    setPickMode(null);
+  }
+
+  function updateLoopMarks() {
+    const info = $("loop-info");
+    $("loop-clear").hidden = loopStart === null;
+    info.textContent = loopStart !== null
+      ? `Loop: m${xmlMeasures[loopStart].number} to m${xmlMeasures[loopEnd].number}${$("loop").checked ? "" : " (Loop off)"}`
+      : "";
+    document.querySelectorAll(".measure").forEach(x => {
+      const i = +x.dataset.measure;
+      x.classList.toggle("inloop", loopStart !== null && i >= loopStart && i <= loopEnd);
+      x.classList.toggle("pending", pickFirst !== null && i === pickFirst);
+    });
+    drawScoreMarks();
+  }
+
+  $("loop-set").addEventListener("click", () => {
+    if (!xmlMeasures.length) return;
+    if (loopPick) { pickFirst = null; setPickMode(null); }
+    else setPickMode("start");
+  });
+  $("loop-clear").addEventListener("click", clearLoop);
+  $("loop").addEventListener("change", updateLoopMarks);
+  window.addEventListener("keydown", e => {
+    if (e.key === "Escape" && loopPick) { pickFirst = null; setPickMode(null); }
   });
 
 
@@ -1205,6 +1290,7 @@
     osmd.render();
     indexCursor();
     moveCursor(xmlMeasures[playFrom]?.start || 0);
+    setPickMode(null);
   }
 
   // Walk the cursor once through the piece to record when each step happens
@@ -1251,7 +1337,56 @@
       if (!osmd) return;
       indexCursor();
       moveCursor(playing ? position() : (xmlMeasures[playFrom]?.start || 0));
+      drawScoreMarks();
     }, 400);
+  });
+
+
+  // ---------- Score measure boxes (click targets and loop shading) ----------
+  // OSMD positions are in units of 10px at zoom 1
+  function measureBoxes() {
+    if (!osmd?.GraphicSheet) return [];
+    const svg = $("score").querySelector("svg"), box = $("score");
+    if (!svg) return [];
+    const sr = svg.getBoundingClientRect(), br = box.getBoundingClientRect();
+    const ox = sr.left - br.left + box.scrollLeft, oy = sr.top - br.top + box.scrollTop;
+    const u = 10 * osmd.zoom;
+    return osmd.GraphicSheet.MeasureList.map(staves => {
+      const first = staves.find(Boolean), last = [...staves].reverse().find(Boolean);
+      if (!first) return null;
+      const p = first.PositionAndShape, q = last.PositionAndShape;
+      return {
+        x: ox + p.AbsolutePosition.x * u,
+        y: oy + (p.AbsolutePosition.y - 2) * u,
+        w: p.Size.width * u,
+        h: (q.AbsolutePosition.y + 4 + 2 - (p.AbsolutePosition.y - 2)) * u,
+      };
+    });
+  }
+
+  function drawScoreMarks() {
+    const box = $("score");
+    box.querySelectorAll(".loop-box, .start-mark").forEach(x => x.remove());
+    const boxes = measureBoxes();
+    if (!boxes.length) return;
+    const add = (cls, b, style = {}) => {
+      const d = document.createElement("div");
+      d.className = cls;
+      Object.assign(d.style, { left: b.x + "px", top: b.y + "px", width: b.w + "px", height: b.h + "px" }, style);
+      box.appendChild(d);
+    };
+    if (loopStart !== null) for (let i = loopStart; i <= loopEnd; i++) boxes[i] && add("loop-box", boxes[i]);
+    if (pickFirst !== null && boxes[pickFirst]) add("loop-box pending", boxes[pickFirst]);
+    const sb = boxes[playFrom];
+    if (sb) add("start-mark", sb, { width: "3px" });
+  }
+
+  $("score").addEventListener("click", e => {
+    const boxes = measureBoxes();
+    const br = $("score").getBoundingClientRect();
+    const x = e.clientX - br.left + $("score").scrollLeft, y = e.clientY - br.top + $("score").scrollTop;
+    const idx = boxes.findIndex(b => b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    if (idx !== -1) handleMeasureClick(idx);
   });
 
   // ---------- MIDI input ----------
