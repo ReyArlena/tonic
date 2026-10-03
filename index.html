@@ -6,11 +6,12 @@
 <title>Chord Finder</title>
 <style>
   :root {
-    --bg: #f6f5f2;
+    --bg: #f3f2ef;
     --panel: #ffffff;
+    --panel-2: #f8f7f5;
     --text: #1d1d1f;
     --muted: #6b6b70;
-    --border: #d8d6d0;
+    --border: #e0ded8;
     --accent: #2f6fde;
     --accent-soft: #dbe7fb;
     --hl: #2e9e6a;
@@ -20,14 +21,17 @@
     --black-key: #1f1f22;
     --key-on: #2f6fde;
     --play: #ee8a1f;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
+    --kb-h: 150px;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #151517;
-      --panel: #1f1f23;
+      --bg: #121214;
+      --panel: #1c1c20;
+      --panel-2: #222227;
       --text: #ececee;
       --muted: #9a9aa2;
-      --border: #34343a;
+      --border: #2e2e34;
       --accent: #6a9cff;
       --accent-soft: #24324d;
       --hl: #3fbf84;
@@ -36,43 +40,66 @@
       --white-key: #e9e9ec;
       --black-key: #0b0b0d;
       --key-on: #4f86f7;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
     }
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    margin: 0; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
-  h1 { font-size: 1.4rem; margin: 0 0 4px; }
-  .sub { color: var(--muted); margin: 0 0 20px; }
-
-  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
-  button, select, input[type=file] {
-    font: inherit; font-size: 0.95rem;
-    padding: 6px 14px; border-radius: 8px;
-    border: 1px solid var(--border); background: var(--panel); color: var(--text);
-    cursor: pointer;
+  button, select, input { font: inherit; color: inherit; }
+  select {
+    font-size: 0.9rem; padding: 5px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--panel); cursor: pointer;
   }
-  button:hover, select:hover { border-color: var(--accent); }
-  label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.95rem; }
-  .status { color: var(--muted); font-size: 0.9rem; }
+  select:hover { border-color: var(--accent); }
+  .status { color: var(--muted); font-size: 0.85rem; }
+  .empty { color: var(--muted); }
 
+  /* ---------- App shell ---------- */
+  .app { display: grid; grid-template-rows: auto auto 1fr; grid-template-columns: minmax(0, 1fr); height: 100vh; }
+  .topbar {
+    display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.05rem; flex: 1; white-space: nowrap; }
+  .brand .ic { width: 24px; height: 24px; color: var(--accent); }
+  .top-actions { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+  .views-nav { display: inline-flex; padding: 3px; border-radius: 11px; background: var(--bg); }
+  .views-nav button {
+    display: inline-flex; align-items: center; gap: 6px; border: none; background: transparent;
+    padding: 6px 14px; border-radius: 8px; font-size: 0.9rem; font-weight: 600; color: var(--muted); cursor: pointer;
+  }
+  .views-nav button .ic { width: 18px; height: 18px; }
+  .views-nav button.active { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+  .midi-dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: 0.5; }
+  .midi-dot.on { background: var(--hl); opacity: 1; box-shadow: 0 0 0 2px var(--panel); }
+
+  /* ---------- Keyboard strip ---------- */
+  .keyboard { padding: 8px 16px 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  .kb-toolbar { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; min-height: 34px; flex-wrap: wrap; }
+  .legend { margin-left: auto; display: flex; gap: 12px; font-size: 0.78rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .app:not(.sheet-view) .legend-play { display: none; }
   .overlay-bar {
-    display: none; align-items: center; gap: 10px; flex-wrap: wrap;
-    margin-bottom: 10px; padding: 6px 12px; border-radius: 8px;
-    background: var(--hl-soft); color: #10301f; font-size: 0.95rem;
+    display: none; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 10px; border-radius: 999px;
+    background: var(--hl-soft); color: #10301f; font-size: 0.85rem; max-width: 60%;
   }
-  .overlay-bar.show { display: flex; }
-  .overlay-bar button { padding: 2px 10px; font-size: 0.85rem; }
+  .overlay-bar.show { display: inline-flex; }
+  .overlay-bar #overlay-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .overlay-bar .icon-btn { color: #10301f; min-width: 24px; height: 24px; padding: 0; border-radius: 50%; }
+  .overlay-bar .icon-btn:hover { background: rgba(0, 0, 0, 0.08); }
+  .overlay-bar .icon-btn .ic { width: 14px; height: 14px; }
 
-  .piano-wrap { overflow-x: auto; padding-bottom: 8px; }
-  .piano { position: relative; height: 190px; user-select: none; touch-action: none; }
+  .piano-wrap { overflow-x: auto; overflow-y: hidden; }
+  .piano { position: relative; height: var(--kb-h); margin: 0 auto; user-select: none; touch-action: none; }
   .key { position: absolute; top: 0; border: 1px solid var(--border); border-radius: 0 0 6px 6px; cursor: pointer; }
-  .key.white { background: var(--white-key); height: 190px; z-index: 1; }
-  .key.black { background: var(--black-key); height: 118px; z-index: 2; border-color: var(--black-key); }
+  .key.white { background: var(--white-key); height: 100%; z-index: 1; }
+  .key.black { background: var(--black-key); height: 62%; z-index: 2; border-color: var(--black-key); }
   .key.white.hl { background: var(--hl-soft); }
   .key.black.hl { background: var(--hl); border-color: var(--hl); }
   .key.hl.tonic { background: var(--hl-strong); border-color: var(--hl-strong); }
@@ -91,99 +118,193 @@
   @keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.3); } }
   .key.white.good, .key.black.good { background: #2e9e6a; border-color: #2e9e6a; animation: none; }
   .key.white.bad, .key.black.bad { background: #d64545; border-color: #d64545; animation: none; }
-  .stats { font-weight: 600; font-size: 0.9rem; }
-  .key.white.playing, .key.black.playing { background: var(--play); border-color: var(--play); }
-  .key.playing .lbl { color: #fff; font-weight: 600; }
+  /* Playing is the top layer: orange fill, with blue then green stepped below as strips */
+  .key.white.playing, .key.black.playing,
+  .key.white.on.playing, .key.black.on.playing,
+  .key.white.hl.playing, .key.black.hl.playing,
+  .key.hl.tonic.playing, .key.on.hl.tonic.playing { background: var(--play); border-color: var(--play); }
+  .key.playing .lbl, .key.white.hl.playing .lbl { color: #fff; font-weight: 600; }
+  .key.on.playing { box-shadow: inset 0 -10px 0 var(--key-on); }
+  .key.hl.playing { box-shadow: inset 0 -10px 0 var(--hl); }
+  .key.hl.tonic.playing { box-shadow: inset 0 -10px 0 var(--hl-strong); }
+  .key.on.hl.playing { box-shadow: inset 0 -10px 0 var(--hl), inset 0 -20px 0 var(--key-on); }
+  .key.on.hl.tonic.playing { box-shadow: inset 0 -10px 0 var(--hl-strong), inset 0 -20px 0 var(--key-on); }
+  .key.on.playing .lbl, .key.hl.playing .lbl { bottom: 13px; }
+  .key.on.hl.playing .lbl { bottom: 23px; }
   .key.on.hl.tonic { box-shadow: inset 0 -10px 0 var(--hl-strong); }
   .key .lbl {
-    position: absolute; bottom: 8px; left: 0; right: 0; text-align: center;
-    font-size: 0.72rem; color: #888; pointer-events: none;
+    position: absolute; bottom: 6px; left: 0; right: 0; text-align: center;
+    font-size: 0.68rem; color: #888; pointer-events: none;
   }
-  .key.black .lbl { bottom: 6px; color: #bbb; }
+  .key.black .lbl { bottom: 5px; color: #bbb; }
+  .piano.narrow .lbl { font-size: 0.55rem; }
   .key.hl .lbl { color: #10301f; font-weight: 600; }
   .key.black.hl .lbl, .key.hl.tonic .lbl, .key.on .lbl { color: #fff; font-weight: 600; }
-  .key.on.hl .lbl { bottom: 14px; }
+  .key.on.hl .lbl { bottom: 13px; }
 
-  .panel {
-    margin-top: 16px; padding: 18px 20px; border-radius: 12px;
-    background: var(--panel); border: 1px solid var(--border);
+  /* ---------- Views ---------- */
+  .views-area { min-height: 0; }
+  .view { display: none; height: 100%; min-height: 0; }
+  .view.active { display: grid; }
+  .pane {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: var(--shadow); overflow: auto; min-height: 0;
   }
-  .notes { color: var(--muted); margin-bottom: 4px; }
-  .chord { font-size: 2.2rem; font-weight: 700; line-height: 1.2; }
-  .chord-name { color: var(--muted); }
-  .section-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 16px 0 6px; }
+  .pane-head {
+    position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px 10px; background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  .pane-head h2 { margin: 0; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .pane-body { padding: 14px 16px 18px; }
+
+  .view-theory { grid-template-columns: minmax(300px, 1fr) minmax(340px, 1.25fr); gap: 12px; padding: 12px 16px 16px; }
+
+  .view-sheet { grid-template-columns: minmax(0, 1fr) 320px; }
+  .view-sheet.collapsed { grid-template-columns: minmax(0, 1fr) 0; }
+  .view-sheet.collapsed .sidebar { display: none; }
+  .sheet-main { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr); min-height: 0; min-width: 0; }
+  .sheet-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px 8px 16px; }
+  .sheet-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sheet-key { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
+  .sheet-toolbar .spacer { flex: 1; }
+  .score-wrap { min-height: 0; padding: 0 16px 12px; display: flex; }
+  .sidebar { border-left: 1px solid var(--border); background: var(--panel); overflow: auto; min-height: 0; }
+
+  /* My sheet music (library), shown at the top of the sidebar in place of its sections */
+  .sidebar.library-open details.sec { display: none; }
+  .library { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .library[hidden] { display: none; }
+  .lib-head { display: flex; align-items: center; justify-content: space-between; }
+  .lib-head h2 { margin: 0; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .lib-add {
+    display: flex; align-items: center; justify-content: center; gap: 8px; height: 38px; border-radius: 10px;
+    border: 1px dashed var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; cursor: pointer;
+  }
+  .lib-add:hover { filter: brightness(0.97); }
+  .lib-note { display: flex; gap: 8px; margin: 0; font-size: 0.78rem; line-height: 1.4; color: var(--muted); }
+  .lib-note .ic { width: 16px; height: 16px; margin-top: 1px; }
+  .lib-search {
+    display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--muted);
+  }
+  .lib-search .ic { width: 16px; height: 16px; }
+  .lib-search input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font-size: 0.9rem; }
+  .lib-search:focus-within { border-color: var(--accent); }
+  .lib-msg { font-size: 0.82rem; color: #d64545; }
+  .lib-msg:empty { display: none; }
+  .lib-list { display: flex; flex-direction: column; gap: 4px; }
+  .lib-item { display: flex; align-items: center; gap: 2px; border-radius: 10px; padding: 2px 2px 2px 0; }
+  .lib-item:hover { background: var(--panel-2); }
+  .lib-item.current { background: var(--accent-soft); }
+  .lib-open {
+    flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+    padding: 6px 10px; border: none; background: none; text-align: left; cursor: pointer; border-radius: 10px;
+  }
+  .lib-name { font-weight: 600; font-size: 0.92rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lib-meta { font-size: 0.74rem; color: var(--muted); }
+  .lib-item .icon-btn { color: var(--muted); }
+  .lib-item .icon-btn:hover { color: var(--text); }
+  .lib-item .icon-btn.confirm { color: #fff; background: #d64545; }
+  .lib-rename { flex: 1; min-width: 0; margin: 4px 6px; padding: 4px 8px; border-radius: 7px; border: 1px solid var(--accent); background: var(--panel); font-size: 0.92rem; }
+  .lib-empty { font-size: 0.85rem; color: var(--muted); padding: 8px 2px; }
+
+  /* Drop zone shown until a file is loaded */
+  .dropzone {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    border: 2px dashed var(--border); border-radius: 16px; color: var(--muted); text-align: center; padding: 24px;
+    cursor: pointer; transition: border-color 0.15s, background-color 0.15s;
+  }
+  .dropzone:hover, .dropzone.over { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+  .dropzone .ic { width: 44px; height: 44px; color: var(--accent); }
+  .dropzone strong { font-size: 1.05rem; color: var(--text); }
+  .dropzone[hidden] { display: none; }
+
+  /* Collapsible sections */
+  details.sec { border-top: 1px solid var(--border); }
+  details.sec:first-of-type { border-top: none; }
+  details.sec > summary {
+    list-style: none; display: flex; align-items: center; gap: 6px; cursor: pointer;
+    padding: 10px 0; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600;
+  }
+  details.sec > summary::-webkit-details-marker { display: none; }
+  details.sec > summary .ic { width: 14px; height: 14px; transition: transform 0.15s; transform: rotate(-90deg); }
+  details.sec[open] > summary .ic { transform: none; }
+  details.sec > summary:hover { color: var(--text); }
+  details.sec > .sec-body { padding-bottom: 12px; }
+  .sidebar details.sec { padding: 0 16px; }
+  .sidebar details.sec:first-of-type { border-top: none; }
+
+  /* ---------- Results ---------- */
+  .notes { color: var(--muted); font-size: 0.9rem; }
+  .chord { font-size: 2.4rem; font-weight: 750; line-height: 1.15; letter-spacing: -0.01em; }
+  .chord-name { color: var(--muted); margin-bottom: 8px; }
+  .result-head { padding-bottom: 6px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip {
     padding: 3px 10px; border-radius: 999px; background: var(--accent-soft);
-    font-size: 0.9rem; border: 1px solid transparent; color: var(--text);
+    font-size: 0.88rem; border: 1px solid transparent; color: var(--text); cursor: default;
   }
+  button.chip { cursor: pointer; }
   button.chip:hover { border-color: var(--accent); }
   .chip.green { background: var(--hl-soft); color: #10301f; }
   .chip.active { border-color: var(--accent); font-weight: 600; }
   .chip small { color: var(--muted); font-weight: 400; margin-left: 4px; }
   .chip.green small { color: #3c5a4a; }
-  .empty { color: var(--muted); }
-  .intervals { display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; font-size: 0.95rem; }
+  .intervals { display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; font-size: 0.92rem; }
   .intervals span:nth-child(odd) { font-weight: 600; }
-  .formula { font-family: ui-monospace, monospace; font-size: 0.95rem; }
+  .formula { font-family: ui-monospace, monospace; font-size: 0.92rem; }
+  .section-title { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
 
-  .tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin: -4px 0 14px; }
+  /* ---------- Browser tabs ---------- */
+  .tabs { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--bg); }
   .tab {
-    border: none; border-bottom: 2px solid transparent; border-radius: 0;
-    background: none; padding: 6px 12px; color: var(--muted);
+    border: none; background: transparent; padding: 5px 14px; border-radius: 7px;
+    font-size: 0.88rem; font-weight: 600; color: var(--muted); cursor: pointer;
   }
-  .tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  .tab.active { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
   .tabpane { display: none; }
   .tabpane.active { display: block; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .degree-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
   .degree {
-    display: flex; flex-direction: column; align-items: center; padding: 6px 4px;
-    border-radius: 8px; border: 1px solid var(--border); background: var(--panel);
+    display: flex; flex-direction: column; align-items: center; padding: 6px 4px; cursor: pointer;
+    border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2);
   }
-  .degree .num { font-size: 0.8rem; color: var(--muted); }
+  .degree:hover { border-color: var(--accent); }
+  .degree .num { font-size: 0.78rem; color: var(--muted); }
   .degree .sym { font-weight: 600; }
-  .measures { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
-  .measure { border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
-  .measure .mnum { font-size: 0.75rem; color: var(--muted); }
+
+  /* Chords by measure */
+  .measures { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 6px; }
+  .measure { border: 1px solid var(--border); border-radius: 10px; padding: 5px 8px; cursor: pointer; background: var(--panel-2); }
+  .measure .mnum { font-size: 0.72rem; color: var(--muted); }
   .measure .chips { gap: 4px; }
-  .measure { cursor: pointer; }
   .measure.start { border-color: var(--accent); }
   .measure.now { background: var(--accent-soft); }
+  .measure.inloop { background: rgba(238, 138, 31, 0.14); }
   .chip.now { background: var(--play); color: #fff; }
-  .playbar {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
-    background: color-mix(in srgb, var(--panel) 88%, transparent);
-    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-    border-top: 1px solid var(--border);
-    box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.08); padding: 8px 16px;
-  }
-  .playbar[hidden] { display: none; }
-  .playbar-inner {
-    max-width: 1400px; margin: 0 auto;
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 10px;
-  }
-  .playbar .group { display: flex; align-items: center; gap: 4px; }
-  .playbar .divider { width: 1px; height: 26px; background: var(--border); }
-  @media (max-width: 760px) { .playbar .divider { display: none; } }
-  .ic { display: inline-flex; width: 20px; height: 20px; }
+
+  /* ---------- Icons & buttons ---------- */
+  .ic { display: inline-flex; width: 20px; height: 20px; flex: none; }
   .ic svg { width: 100%; height: 100%; }
   .ic.mirror svg { transform: scaleX(-1); }
-
   .icon-btn {
     position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-    min-width: 38px; height: 38px; padding: 0 9px; border-radius: 10px;
+    min-width: 36px; height: 36px; padding: 0 8px; border-radius: 10px;
     border: 1px solid transparent; background: transparent; color: var(--text);
     cursor: pointer; transition: background-color 0.12s, color 0.12s, border-color 0.12s;
   }
-  .icon-btn:hover { background: var(--accent-soft); border-color: transparent; }
+  .icon-btn:hover { background: var(--accent-soft); }
   .icon-btn.small { min-width: 30px; height: 30px; padding: 0 6px; }
   .icon-btn.small .ic { width: 16px; height: 16px; }
+  .icon-btn.labelled { padding: 0 12px 0 9px; font-size: 0.88rem; font-weight: 600; }
+  .icon-btn.small.labelled { padding: 0 10px 0 7px; font-size: 0.8rem; }
+  .toggle b { font-weight: 600; }
   .icon-btn.with-value { font-variant-numeric: tabular-nums; font-weight: 600; }
   .icon-btn.with-value small { color: var(--muted); font-weight: 500; font-size: 0.75rem; }
   .icon-btn[hidden] { display: none; }
-  /* Toggles: real checkbox hidden inside, lit when checked */
-  /* Sibling selectors (not :has) so state set from code always shows */
+  .icon-btn.active { background: var(--accent-soft); color: var(--accent); }
+  /* Toggles: real checkbox hidden inside, lit when checked (sibling selectors so state set from code shows) */
   .toggle { color: var(--muted); isolation: isolate; }
   .toggle input { position: absolute; opacity: 0; pointer-events: none; }
   .toggle .bg { position: absolute; inset: 0; border-radius: inherit; z-index: -1; transition: background-color 0.12s; }
@@ -196,6 +317,35 @@
   .icon-btn.armed { color: var(--play); border-color: var(--play); animation: armed 0.9s ease-in-out infinite alternate; }
   @keyframes armed { from { box-shadow: 0 0 0 0 rgba(238, 138, 31, 0.45); } to { box-shadow: 0 0 0 5px rgba(238, 138, 31, 0); } }
 
+  /* Settings switches */
+  .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 6px 0; font-size: 0.9rem; cursor: pointer; }
+  .switch-row small { display: block; color: var(--muted); font-size: 0.78rem; }
+  .switch {
+    appearance: none; -webkit-appearance: none; flex: none; width: 36px; height: 20px; border-radius: 999px;
+    background: var(--border); position: relative; cursor: pointer; transition: background-color 0.15s; margin: 0;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); transition: transform 0.15s;
+  }
+  .switch:checked { background: var(--accent); }
+  .switch:checked::after { transform: translateX(16px); }
+  .field-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 6px 0; font-size: 0.9rem; }
+  .settings { min-width: 280px; }
+  .settings hr { border: none; border-top: 1px solid var(--border); margin: 6px 0; }
+  .danger-btn {
+    width: 100%; margin: 4px 0 2px; height: 34px; border-radius: 9px; cursor: pointer; font-weight: 600; font-size: 0.88rem;
+    border: 1px solid #d64545; background: transparent; color: #d64545;
+  }
+  .danger-btn:hover, .danger-btn.confirm { background: #d64545; color: #fff; }
+
+  /* ---------- Playback bar (bottom of the sheet view) ---------- */
+  .playbar { border-top: 1px solid var(--border); background: var(--panel); padding: 8px 16px; }
+  .playbar[hidden] { display: none; }
+  .playbar-inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 10px; }
+  .playbar .group { display: flex; align-items: center; gap: 4px; }
+  .playbar .divider { width: 1px; height: 26px; background: var(--border); }
+  @media (max-width: 760px) { .playbar .divider { display: none; } }
   .play-btn {
     display: inline-flex; align-items: center; justify-content: center;
     width: 46px; height: 46px; padding: 0; border-radius: 50%;
@@ -206,18 +356,18 @@
   .play-btn:hover { filter: brightness(1.1); }
   .play-btn:active { transform: scale(0.94); }
   .play-btn .ic { width: 22px; height: 22px; }
-
   .chip-info {
     display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px;
     border-radius: 999px; background: var(--bg); color: var(--muted);
     font-size: 0.85rem; font-variant-numeric: tabular-nums; white-space: nowrap; margin-left: 4px;
   }
   .chip-info .ic { width: 15px; height: 15px; }
+  button.chip-info { border: 1px solid transparent; cursor: pointer; }
+  button.chip-info:hover { border-color: var(--accent); color: var(--text); }
   .chip-info.stats { color: var(--text); font-weight: 600; }
   .chip-info.stats.empty { display: none; }
   .loop-info { font-size: 0.85rem; color: var(--play); font-weight: 600; white-space: nowrap; margin-left: 4px; }
   .loop-info:empty { display: none; }
-
   .practice-hands { display: inline-flex; gap: 2px; }
   .practise-btn { color: var(--muted); }
   .practise-btn.active { background: var(--accent-soft); color: var(--accent); }
@@ -226,23 +376,27 @@
   .toggle.locked { opacity: 0.35; cursor: not-allowed; }
   .toggle.locked input:checked ~ .bg { background: transparent; }
 
-  /* Pop-out sliders (open on hover, or on click for touch) */
+  /* ---------- Pop-outs (open on hover, or on click; .click ones only on click) ---------- */
   .pop { position: relative; }
   .popover {
     display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
     padding-bottom: 10px; z-index: 60;
   }
-  .pop-title, .pop-row { padding: 0 14px; }
   .popover::before {
     content: ""; position: absolute; inset: 0 0 10px 0; z-index: -1;
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
   }
-  .pop-title { padding-top: 10px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; background: none; }
+  .pop.down .popover { bottom: auto; top: 100%; padding-bottom: 0; padding-top: 8px; }
+  .pop.down .popover::before { inset: 8px 0 0 0; }
+  .pop.right .popover { left: auto; right: 0; transform: none; }
+  .pop-title, .pop-row { padding: 0 14px; }
+  .pop-title { padding-top: 10px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
   .pop-title .muted { color: var(--muted); font-weight: 400; margin-left: 4px; }
-  .pop-row { display: flex; align-items: center; gap: 6px; padding-bottom: 10px; padding-top: 6px; background: none; }
+  .pop-row { display: flex; align-items: center; gap: 6px; padding-bottom: 10px; padding-top: 6px; }
   .pop-row input[type=range] { width: 170px; accent-color: var(--accent); }
-  .pop:hover .popover, .pop.open .popover { display: block; }
+  .pop-body { padding: 10px 14px 12px; }
+  .pop:not(.click):hover .popover, .pop.open .popover { display: block; }
 
   /* Instant tooltips */
   .tip {
@@ -252,215 +406,321 @@
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   }
   .tip.show { display: block; }
-  /* Score is always drawn on white paper, also in dark mode */
+
+  /* ---------- Score (always on white paper, also in dark mode) ---------- */
   .score {
-    margin-top: 12px; max-height: 460px; overflow: auto; position: relative;
-    background: #fff; border-radius: 8px; border: 1px solid var(--border);
+    flex: 1; min-width: 0; overflow-x: hidden; overflow-y: auto; position: relative; cursor: pointer;
+    background: #fff; border-radius: 14px; border: 1px solid var(--border); box-shadow: var(--shadow);
   }
   .score[hidden] { display: none; }
-  .score { cursor: pointer; }
   .loop-box { position: absolute; background: rgba(238, 138, 31, 0.16); border-radius: 4px; pointer-events: none; }
   .start-mark { position: absolute; width: 3px; border-radius: 2px; background: var(--accent); pointer-events: none; }
   /* Hover indicator: the note a click would land on */
-  .hover-mark {
-    position: absolute; width: 2px; border-radius: 1px; pointer-events: none;
-    background: rgba(238, 138, 31, 0.8); display: none;
-  }
+  .hover-mark { position: absolute; width: 2px; border-radius: 1px; pointer-events: none; background: rgba(238, 138, 31, 0.8); display: none; }
   .hover-mark span {
     position: absolute; bottom: 100%; left: 50%; transform: translate(-50%, -2px);
     font: 600 11px/1.3 system-ui, sans-serif; white-space: nowrap;
     background: #ee8a1f; color: #fff; padding: 1px 6px; border-radius: 4px;
   }
-  .measure.inloop { background: rgba(238, 138, 31, 0.14); }
   .picking .measure, .picking.score { cursor: pointer; }
-  button.armed { border-color: var(--play); color: var(--play); font-weight: 600; }
-  @media (max-width: 600px) {
+
+  /* ---------- Small screens: let the page scroll and stack panels ---------- */
+  @media (max-width: 860px) {
+    body { overflow: auto; }
+    .app { height: auto; min-height: 100vh; }
+    .brand span:last-child { display: none; }
+    .views-nav button { padding: 6px 10px; }
+    .legend { display: none; }
+    .view-theory { grid-template-columns: 1fr; }
+    .view-sheet, .view-sheet.collapsed { grid-template-columns: 1fr; }
+    .score-wrap { height: 65vh; }
+    .sidebar { border-left: none; border-top: 1px solid var(--border); }
+    .playbar { position: sticky; bottom: 0; z-index: 40; }
     .degree-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+  @media (max-width: 560px) {
+    .topbar { gap: 6px; padding: 8px 10px; }
+    .views-nav button .label { display: none; }
+    .views-nav button { padding: 6px 12px; }
+    .sheet-key { display: none; }
   }
 </style>
 </head>
 <body>
-<main>
-  <h1>Chord Finder</h1>
-  <p class="sub">Click keys (or play a MIDI keyboard) to pick notes. The lowest note counts as the bass.
-    Blue = selected notes, green = highlighted scale or key.</p>
-
-  <div class="controls">
-    <button id="play">Play</button>
-    <button id="clear">Clear</button>
-    <label>Spelling
-      <select id="spelling">
-        <option value="sharp">Sharps (C#)</option>
-        <option value="flat">Flats (Db)</option>
-      </select>
-    </label>
-    <label><input type="checkbox" id="select-mode" checked> Select keys</label>
-    <label><input type="checkbox" id="sound" checked> Sound</label>
-    <label>Instrument
-      <select id="instrument">
-        <option value="piano">Piano</option>
-        <option value="synth">Synth</option>
-      </select>
-    </label>
-    <span class="status" id="piano-status"></span>
-    <button id="midi">Connect MIDI</button>
-    <label><input type="checkbox" id="midi-sound"> Synth for MIDI</label>
-    <span class="status" id="midi-status"></span>
-  </div>
-
-  <div class="overlay-bar" id="overlay-bar">
-    <span id="overlay-label"></span>
-    <button id="overlay-clear">Remove highlight</button>
-  </div>
-
-  <div class="piano-wrap" id="piano-wrap"><div class="piano" id="piano"></div></div>
-
-  <div class="panel" id="result"></div>
-
-  <div class="panel">
-    <div class="tabs">
-      <button class="tab active" data-tab="chords">Chords</button>
-      <button class="tab" data-tab="scales">Scales</button>
-      <button class="tab" data-tab="keys">Keys</button>
-      <button class="tab" data-tab="sheet">Sheet music</button>
-    </div>
-
-    <div class="tabpane active" id="tab-chords">
-      <div class="row">
-        <select id="chord-root"></select>
-        <select id="chord-type"></select>
-      </div>
-      <div class="section-title">All chords for this root</div>
-      <div class="chips" id="chord-list"></div>
-    </div>
-
-    <div class="tabpane" id="tab-scales">
-      <div class="row">
-        <select id="scale-root"></select>
-        <select id="scale-type"></select>
-      </div>
-      <div id="scale-info"></div>
-    </div>
-
-    <div class="tabpane" id="tab-keys">
-      <div class="row">
-        <select id="key-root"></select>
-        <select id="key-mode">
-          <option value="major">major</option>
-          <option value="minor">minor (natural)</option>
-          <option value="harmonic minor">harmonic minor</option>
-        </select>
-      </div>
-      <div id="key-info"></div>
-    </div>
-
-    <div class="tabpane" id="tab-sheet">
-      <div class="row">
-        <input type="file" id="xml-file" accept=".musicxml,.xml">
-        <label>Group by
-          <select id="xml-split">
-            <option value="1" selected>measure</option>
-            <option value="2">half measure</option>
-            <option value="beat">beat</option>
-          </select>
-        </label>
-      </div>
-      <div class="score" id="score" hidden></div>
-      <p class="status">Uncompressed MusicXML only (.musicxml / .xml, not .mxl). Click a chord to see it on the piano;
-        the actual notes in that part of the music turn green. Click a measure to play from there.
-        Muted hands still light up their keys (orange) so you can play along.</p>
-      <div id="xml-info"></div>
-    </div>
-  </div>
-</main>
-
-<!-- Playback controls, fixed to the bottom of the window once sheet music is loaded.
-     The real inputs (ids used by the playback code) sit inside the styled controls. -->
-<div class="playbar" id="player" hidden>
-  <div class="playbar-inner">
-    <div class="group">
-      <button id="xml-play" class="play-btn" data-tip="Play"><span class="ic" data-ic="play"></span></button>
-      <button id="xml-stop" class="icon-btn" data-tip="Stop and go back to the start point"><span class="ic" data-ic="stop"></span></button>
-      <span class="chip-info" data-tip="Start point. Click a note on the score or a chord chip to move it">
-        <span class="ic" data-ic="map-pin"></span><span id="play-from"></span>
-      </span>
-    </div>
-
-    <div class="divider"></div>
-
-    <div class="group">
-      <div class="pop">
-        <button class="icon-btn with-value" aria-label="Tempo">
-          <span class="ic" data-ic="metronome"></span><span id="tempo-val">100</span><small>BPM</small>
-        </button>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="ic" data-ic="piano-keys"></span><span>Chord Finder</span></div>
+    <nav class="views-nav" id="views-nav">
+      <button data-view="theory" class="active" data-tip="Chords, scales and keys: click keys to name chords, or browse below"><span class="ic" data-ic="books"></span><span class="label">Theory</span></button>
+      <button data-view="sheet" data-tip="Open sheet music, see its chords, play it back and practise along"><span class="ic" data-ic="music-notes"></span><span class="label">Sheet music</span></button>
+    </nav>
+    <div class="top-actions">
+      <span class="status" id="piano-status"></span>
+      <button id="midi" class="icon-btn" data-tip="Connect a MIDI keyboard (Chrome or Edge)">
+        <span class="ic" data-ic="plugs"></span><span class="midi-dot" id="midi-dot"></span>
+      </button>
+      <div class="pop down right click">
+        <button class="icon-btn" data-tip="Settings"><span class="ic" data-ic="gear-six"></span></button>
         <div class="popover">
-          <div class="pop-title">Tempo <span class="muted">beats per minute</span></div>
-          <div class="pop-row">
-            <button class="icon-btn small" id="tempo-down" data-tip="Slower (-5 BPM)"><span class="ic" data-ic="minus"></span></button>
-            <input type="range" id="tempo" min="30" max="220" value="100">
-            <button class="icon-btn small" id="tempo-up" data-tip="Faster (+5 BPM)"><span class="ic" data-ic="plus"></span></button>
-          </div>
-        </div>
-      </div>
-      <div class="pop">
-        <button class="icon-btn with-value" aria-label="Volume">
-          <span class="ic" data-ic="speaker-high" id="volume-icon"></span><span id="volume-val">80</span><small>%</small>
-        </button>
-        <div class="popover">
-          <div class="pop-title">Volume <span class="muted">sheet music playback</span></div>
-          <div class="pop-row">
-            <input type="range" id="volume" min="0" max="100" value="80">
+          <div class="pop-body settings">
+            <div class="field-row">Note spelling
+              <select id="spelling">
+                <option value="sharp">Sharps (C#)</option>
+                <option value="flat">Flats (Db)</option>
+              </select>
+            </div>
+            <div class="field-row">Instrument
+              <select id="instrument">
+                <option value="piano">Piano</option>
+                <option value="synth">Synth</option>
+              </select>
+            </div>
+            <div class="field-row">Piano size
+              <select id="piano-range">
+                <option value="2">2 octaves</option>
+                <option value="3">3 octaves</option>
+                <option value="4">4 octaves</option>
+                <option value="5">5 octaves</option>
+                <option value="6">6 octaves</option>
+                <option value="7">7 octaves</option>
+                <option value="88">Full piano (88 keys)</option>
+              </select>
+            </div>
+            <hr>
+            <label class="switch-row"><span>Sound<small>Play notes when you click keys</small></span><input type="checkbox" id="sound" class="switch" checked></label>
+            <hr>
+            <label class="switch-row"><span>Highlights in all octaves<small>Off: scales and keys show one octave, from the root</small></span><input type="checkbox" id="all-octaves" class="switch"></label>
+            <hr>
+            <label class="switch-row"><span>Synth for MIDI<small>Play sound for MIDI input (off if your keyboard has speakers)</small></span><input type="checkbox" id="midi-sound" class="switch"></label>
+            <div class="status" id="midi-status">MIDI not connected</div>
+            <hr>
+            <button class="danger-btn" id="reset-app">Reset app</button>
+            <div class="status">Deletes all saved sheet music and settings, then reloads.</div>
           </div>
         </div>
       </div>
     </div>
+  </header>
 
-    <div class="divider"></div>
-
-    <div class="group">
-      <label class="icon-btn toggle" data-tip="Loop on/off. Repeats the loop section, or from the start point to the end if none is set">
-        <input type="checkbox" id="loop"><span class="ic" data-ic="repeat"></span>
+  <section class="keyboard">
+    <div class="kb-toolbar">
+      <button id="play" class="icon-btn small" data-tip="Play the selected notes"><span class="ic" data-ic="play"></span></button>
+      <button id="clear" class="icon-btn small" data-tip="Clear the selection"><span class="ic" data-ic="eraser"></span></button>
+      <label class="icon-btn small labelled toggle" id="select-mode-btn">
+        <input type="checkbox" id="select-mode"><span class="ic" data-ic="cursor-click"></span><b>Select</b>
       </label>
-      <button id="loop-start" class="icon-btn" data-tip="Set loop start: click this, then a note on the score (or a chord chip)"><span class="ic" data-ic="flag"></span></button>
-      <button id="loop-end" class="icon-btn" data-tip="Set loop end: click this, then the last note to include"><span class="ic" data-ic="flag-checkered"></span></button>
-      <button id="loop-clear" class="icon-btn" data-tip="Clear the loop section" hidden><span class="ic" data-ic="x-circle"></span></button>
-      <span class="loop-info" id="loop-info"></span>
-    </div>
-
-    <div class="divider"></div>
-
-    <div class="group">
-      <label class="icon-btn toggle hand sound-toggle" data-hand="L" data-tip-on="Left hand sound on/off (muted hands still light up their keys)">
-        <input type="checkbox" id="lh" checked><span class="ic" data-ic="speaker-high"></span><b>L</b>
-      </label>
-      <label class="icon-btn toggle hand sound-toggle" data-hand="R" data-tip-on="Right hand sound on/off (muted hands still light up their keys)">
-        <input type="checkbox" id="rh" checked><span class="ic" data-ic="speaker-high"></span><b>R</b>
-      </label>
-    </div>
-
-    <div class="divider"></div>
-
-    <div class="group practice" id="practice-group">
-      <label class="icon-btn toggle" data-tip="Wait for me: playback stops at each note until you play it (MIDI or on-screen keys)">
-        <input type="checkbox" id="wait"><span class="ic" data-ic="hourglass"></span>
-      </label>
-      <div class="practice-hands" id="practice-hands">
-        <button class="icon-btn hand practise-btn" data-hand="L" data-tip="Practise the left hand: Wait mode waits for your left-hand notes. Light both hands to practise both"><span class="ic mirror" data-ic="hand"></span><b>L</b></button>
-        <button class="icon-btn hand practise-btn" data-hand="R" data-tip="Practise the right hand: Wait mode waits for your right-hand notes. Light both hands to practise both"><span class="ic" data-ic="hand"></span><b>R</b></button>
+      <div class="overlay-bar" id="overlay-bar">
+        <span id="overlay-label"></span>
+        <button id="overlay-clear" class="icon-btn" data-tip="Remove the green highlight"><span class="ic" data-ic="x"></span></button>
       </div>
-      <select id="practice-hand" hidden>
-        <option value="RL">both</option>
-        <option value="R">right</option>
-        <option value="L">left</option>
-      </select>
-      <label class="icon-btn toggle octave" data-tip="Any octave: accept the right note in any octave. Off: the exact written note only">
-        <input type="checkbox" id="any-octave" checked><span class="ic" data-ic="arrows-vertical"></span>
-      </label>
-      <span class="chip-info stats empty" data-tip="Wait mode score: correct and wrong notes since you pressed Play">
-        <span class="ic" data-ic="target"></span><span id="practice-stats"></span>
-      </span>
+      <div class="legend">
+        <span><i style="background: var(--key-on)"></i>Selected</span>
+        <span><i style="background: var(--hl)"></i>Scale / key</span>
+        <span class="legend-play"><i style="background: var(--play)"></i>Playing</span>
+      </div>
     </div>
-  </div>
+    <div class="piano-wrap" id="piano-wrap"><div class="piano" id="piano"></div></div>
+  </section>
+
+  <main class="views-area">
+    <!-- Theory: results on the left, chord / scale / key browser on the right -->
+    <section class="view view-theory active" id="view-theory">
+      <div class="pane">
+        <div class="pane-head"><h2>Selected notes</h2></div>
+        <div class="pane-body" id="theory-result-slot"><div class="result" id="result"></div></div>
+      </div>
+      <div class="pane">
+        <div class="pane-head">
+          <div class="tabs">
+            <button class="tab active" data-tab="chords">Chords</button>
+            <button class="tab" data-tab="scales">Scales</button>
+            <button class="tab" data-tab="keys">Keys</button>
+          </div>
+        </div>
+        <div class="pane-body">
+          <div class="tabpane active" id="tab-chords">
+            <div class="row">
+              <select id="chord-root"></select>
+              <select id="chord-type"></select>
+            </div>
+            <div class="section-title">All chords for this root</div>
+            <div class="chips" id="chord-list"></div>
+          </div>
+          <div class="tabpane" id="tab-scales">
+            <div class="row">
+              <select id="scale-root"></select>
+              <select id="scale-type"></select>
+            </div>
+            <div id="scale-info"></div>
+          </div>
+          <div class="tabpane" id="tab-keys">
+            <div class="row">
+              <select id="key-root"></select>
+              <select id="key-mode">
+                <option value="major">major</option>
+                <option value="minor">minor (natural)</option>
+                <option value="harmonic minor">harmonic minor</option>
+              </select>
+            </div>
+            <div id="key-info"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sheet music: score + playback bar, analysis sidebar on the right -->
+    <section class="view view-sheet" id="view-sheet">
+      <div class="sheet-main">
+        <div class="sheet-toolbar">
+          <button id="open-file" class="icon-btn labelled" data-tip="My sheet music: open a saved sheet or add a new file"><span class="ic" data-ic="folder-open"></span>Open</button>
+          <input type="file" id="xml-file" accept=".musicxml,.xml" hidden>
+          <span class="sheet-title" id="sheet-title"></span>
+          <span class="sheet-key" id="sheet-key"></span>
+          <span class="spacer"></span>
+          <label class="icon-btn toggle" data-tip="Show the song's key on the piano (green)">
+            <input type="checkbox" id="show-key"><span class="ic" data-ic="highlighter-circle"></span>
+          </label>
+          <div class="pop down right click">
+            <button class="icon-btn" data-tip="Sheet music settings"><span class="ic" data-ic="gear-six"></span></button>
+            <div class="popover">
+              <div class="pop-body settings">
+                <div class="field-row">Group chords by
+                  <select id="xml-split">
+                    <option value="1" selected>measure</option>
+                    <option value="2">half measure</option>
+                    <option value="beat">beat</option>
+                  </select>
+                </div>
+                <hr>
+                <div class="status">Uncompressed MusicXML only (.musicxml / .xml, not .mxl). In MuseScore: File, Export, MusicXML, uncompressed.</div>
+              </div>
+            </div>
+          </div>
+          <button id="sidebar-toggle" class="icon-btn" data-tip="Show or hide the analysis panel"><span class="ic" data-ic="sidebar-simple"></span></button>
+        </div>
+        <div class="score-wrap">
+          <div class="dropzone" id="dropzone">
+            <span class="ic" data-ic="file-arrow-up"></span>
+            <strong>Open sheet music</strong>
+            <span>Click to pick from My sheet music, or drop a MusicXML file here</span>
+          </div>
+          <div class="score" id="score" hidden></div>
+        </div>
+        <!-- Playback controls, shown once sheet music is loaded.
+             The real inputs (ids used by the playback code) sit inside the styled controls. -->
+        <div class="playbar" id="player" hidden>
+          <div class="playbar-inner">
+            <div class="group">
+              <button id="xml-play" class="play-btn" data-tip="Play"><span class="ic" data-ic="play"></span></button>
+              <button id="xml-stop" class="icon-btn" data-tip="Stop and go back to the start point"><span class="ic" data-ic="stop"></span></button>
+              <button class="chip-info reset-start" id="reset-start" data-tip="Start point (click a note on the score or a chord chip to move it). Click to reset to the start">
+                <span class="ic" data-ic="map-pin"></span><span id="play-from"></span>
+              </button>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="group">
+              <div class="pop">
+                <button class="icon-btn with-value" aria-label="Tempo">
+                  <span class="ic" data-ic="metronome"></span><span id="tempo-val">100</span><small>BPM</small>
+                </button>
+                <div class="popover">
+                  <div class="pop-title">Tempo <span class="muted">beats per minute</span></div>
+                  <div class="pop-row">
+                    <button class="icon-btn small" id="tempo-down" data-tip="Slower (-5 BPM)"><span class="ic" data-ic="minus"></span></button>
+                    <input type="range" id="tempo" min="30" max="220" value="100">
+                    <button class="icon-btn small" id="tempo-up" data-tip="Faster (+5 BPM)"><span class="ic" data-ic="plus"></span></button>
+                    <button class="icon-btn small" id="tempo-reset"><span class="ic" data-ic="arrow-counter-clockwise"></span></button>
+                  </div>
+                </div>
+              </div>
+              <div class="pop">
+                <button class="icon-btn with-value" aria-label="Volume">
+                  <span class="ic" data-ic="speaker-high" id="volume-icon"></span><span id="volume-val">80</span><small>%</small>
+                </button>
+                <div class="popover">
+                  <div class="pop-title">Volume <span class="muted">sheet music playback</span></div>
+                  <div class="pop-row">
+                    <input type="range" id="volume" min="0" max="100" value="80">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="group">
+              <label class="icon-btn toggle" data-tip="Loop on/off. Repeats the loop section, or from the start point to the end if none is set">
+                <input type="checkbox" id="loop"><span class="ic" data-ic="repeat"></span>
+              </label>
+              <button id="loop-start" class="icon-btn" data-tip="Set loop start: click this, then a note on the score (or a chord chip)"><span class="ic" data-ic="flag"></span></button>
+              <button id="loop-end" class="icon-btn" data-tip="Set loop end: click this, then the last note to include"><span class="ic" data-ic="flag-checkered"></span></button>
+              <button id="loop-clear" class="icon-btn" data-tip="Clear the loop section" hidden><span class="ic" data-ic="x-circle"></span></button>
+              <span class="loop-info" id="loop-info"></span>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="group">
+              <label class="icon-btn toggle hand sound-toggle" data-hand="L" data-tip-on="Left hand sound on/off (muted hands still light up their keys)">
+                <input type="checkbox" id="lh" checked><span class="ic" data-ic="speaker-high"></span><b>L</b>
+              </label>
+              <label class="icon-btn toggle hand sound-toggle" data-hand="R" data-tip-on="Right hand sound on/off (muted hands still light up their keys)">
+                <input type="checkbox" id="rh" checked><span class="ic" data-ic="speaker-high"></span><b>R</b>
+              </label>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="group practice" id="practice-group">
+              <label class="icon-btn toggle" data-tip="Wait for me: playback stops at each note until you play it (MIDI or on-screen keys)">
+                <input type="checkbox" id="wait"><span class="ic" data-ic="hourglass"></span>
+              </label>
+              <div class="practice-hands" id="practice-hands">
+                <button class="icon-btn hand practise-btn" data-hand="L" data-tip="Practise the left hand: Wait mode waits for your left-hand notes. Light both hands to practise both"><span class="ic mirror" data-ic="hand"></span><b>L</b></button>
+                <button class="icon-btn hand practise-btn" data-hand="R" data-tip="Practise the right hand: Wait mode waits for your right-hand notes. Light both hands to practise both"><span class="ic" data-ic="hand"></span><b>R</b></button>
+              </div>
+              <select id="practice-hand" hidden>
+                <option value="RL">both</option>
+                <option value="R">right</option>
+                <option value="L">left</option>
+              </select>
+              <label class="icon-btn toggle octave" data-tip="Any octave: accept the right note in any octave. Off: the exact written note only">
+                <input type="checkbox" id="any-octave" checked><span class="ic" data-ic="arrows-vertical"></span>
+              </label>
+              <span class="chip-info stats empty" data-tip="Wait mode score: correct and wrong notes since you pressed Play">
+                <span class="ic" data-ic="target"></span><span id="practice-stats"></span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <aside class="sidebar" id="sidebar">
+        <div class="library" id="library" hidden>
+          <div class="lib-head">
+            <h2>My sheet music</h2>
+            <button class="icon-btn small" id="lib-close" data-tip="Close (Esc)"><span class="ic" data-ic="x"></span></button>
+          </div>
+          <button class="lib-add" id="lib-add" data-tip="Choose a MusicXML file (.musicxml / .xml) to save a copy here and open it">
+            <span class="ic" data-ic="plus-circle"></span>Add new file
+          </button>
+          <p class="lib-note"><span class="ic" data-ic="info"></span><span>Adding a file saves a copy of the sheet music in this browser. It isn't linked to the original file, so if you edit it elsewhere (e.g. MuseScore), add it again. Clearing this browser's site data removes the saved copies.</span></p>
+          <label class="lib-search"><span class="ic" data-ic="magnifying-glass"></span><input type="search" id="lib-search" placeholder="Search"></label>
+          <div class="lib-msg" id="lib-msg"></div>
+          <div class="lib-list" id="lib-list"></div>
+        </div>
+        <details class="sec" data-sec="measures" open>
+          <summary><span class="ic" data-ic="caret-down"></span>Chords by measure</summary>
+          <div class="sec-body"><div id="xml-info"></div></div>
+        </details>
+        <details class="sec" data-sec="sheet-result" open>
+          <summary><span class="ic" data-ic="caret-down"></span>Selected notes</summary>
+          <div class="sec-body" id="sheet-result-slot"></div>
+        </details>
+      </aside>
+    </section>
+  </main>
 </div>
 <div class="tip" id="tip" role="tooltip"></div>
 
@@ -475,7 +735,12 @@
   const FLATS  = ["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
   const ROOTS  = ["C","Db","D","Eb","E","F","F#","G","Ab","A","Bb","B"];
   const BLACK = new Set([1, 3, 6, 8, 10]);
-  const LOW = 36, HIGH = 84; // C2 to C6
+  // Piano sizes offered in settings: [low, high] MIDI notes, centred on middle C
+  const PIANO_RANGES = {
+    "2": [48, 72], "3": [48, 84], "4": [36, 84], "5": [36, 96],
+    "6": [24, 96], "7": [24, 108], "88": [21, 108],
+  };
+  let LOW = 36, HIGH = 84; // C2 to C6 by default
 
   const CHORD_TYPES = [
     { id: "M",      suf: "",       name: "major",               iv: [0,4,7] },
@@ -520,6 +785,11 @@
   const STEP_NAMES = { 1: "H", 2: "W", 3: "W+H", 4: "2W" };
   const NUMERALS = ["I","II","III","IV","V","VI","VII"];
 
+  // ---------- Remembered UI state (view, sidebar, open sections) ----------
+  const ui = (() => { try { return JSON.parse(localStorage.getItem("chord-finder-ui")) || {}; } catch (e) { return {}; } })();
+  ui.sec = ui.sec || {};
+  function saveUi() { try { localStorage.setItem("chord-finder-ui", JSON.stringify(ui)); } catch (e) {} }
+
   // ---------- State ----------
   const selected = new Set();
   let playingMidis = new Set(); // keys sounding during sheet music playback
@@ -536,27 +806,44 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   // ---------- Keyboard ----------
-  const WHITE_W = 36, BLACK_W = 24;
+  // Keys are sized to fit the strip (within limits; below the minimum the strip scrolls).
+  // Wide ranges get narrower and slightly shorter keys; the height never exceeds --kb-h.
   const keyEls = {};
-  let whiteIndex = 0;
-  for (let m = LOW; m <= HIGH; m++) {
-    const el = document.createElement("div");
-    const isBlack = BLACK.has(m % 12);
-    el.className = "key " + (isBlack ? "black" : "white");
-    el.style.left = (isBlack ? whiteIndex * WHITE_W - BLACK_W / 2 : whiteIndex * WHITE_W) + "px";
-    el.style.width = (isBlack ? BLACK_W : WHITE_W) + "px";
-    if (!isBlack) whiteIndex++;
-    el.innerHTML = '<span class="lbl"></span>';
-    el.dataset.midi = m;
-    pianoEl.appendChild(el);
-    keyEls[m] = el;
+  function buildKeys(range) {
+    [LOW, HIGH] = PIANO_RANGES[range] || PIANO_RANGES["4"];
+    pianoEl.innerHTML = "";
+    for (const k of Object.keys(keyEls)) delete keyEls[k];
+    for (let m = LOW; m <= HIGH; m++) {
+      const el = document.createElement("div");
+      el.className = "key " + (BLACK.has(m % 12) ? "black" : "white");
+      el.innerHTML = '<span class="lbl"></span>';
+      el.dataset.midi = m;
+      pianoEl.appendChild(el);
+      keyEls[m] = el;
+    }
+    layoutKeys();
   }
-  pianoEl.style.width = (whiteIndex * WHITE_W) + "px";
-  // Start scrolled so middle C is in view on narrow screens
-  requestAnimationFrame(() => {
+  function layoutKeys() {
     const wrap = $("piano-wrap");
-    wrap.scrollLeft = (parseFloat(keyEls[60].style.left) - wrap.clientWidth / 2 + WHITE_W * 3);
-  });
+    let whites = 0;
+    for (let m = LOW; m <= HIGH; m++) if (!BLACK.has(m % 12)) whites++;
+    const whiteW = Math.max(20, Math.min(48, Math.floor(wrap.clientWidth / whites)));
+    const blackW = Math.round(whiteW * 0.64);
+    let wi = 0;
+    for (let m = LOW; m <= HIGH; m++) {
+      const el = keyEls[m], isBlack = BLACK.has(m % 12);
+      el.style.left = (isBlack ? wi * whiteW - blackW / 2 : wi * whiteW) + "px";
+      el.style.width = (isBlack ? blackW : whiteW) + "px";
+      if (!isBlack) wi++;
+    }
+    pianoEl.style.width = wi * whiteW + "px";
+    pianoEl.style.height = Math.min(150, Math.round(whiteW * 5.6)) + "px";
+    pianoEl.classList.toggle("narrow", whiteW < 28);
+    // When the strip has to scroll, start with middle C in view
+    if (wi * whiteW > wrap.clientWidth) wrap.scrollLeft = parseFloat(keyEls[60].style.left) - wrap.clientWidth / 2 + whiteW * 3;
+  }
+  buildKeys(ui.range || "4");
+  new ResizeObserver(layoutKeys).observe($("piano-wrap"));
 
   function flashKey(m) {
     keyEls[m].classList.add("pressed");
@@ -579,7 +866,7 @@
     const el = keyAt(e.clientX, e.clientY);
     if (!el || +el.dataset.midi === dragKey) return;
     dragKey = +el.dataset.midi;
-    playNotes([dragKey], true);
+    playNotes([dragKey]);
     if (waitActive()) practiceInput(dragKey);
     else flashKey(dragKey);
   });
@@ -588,13 +875,13 @@
   function toggle(m) {
     // In Wait mode, keys are answers, not selections
     if (waitActive()) {
-      playNotes([m], true);
+      playNotes([m]);
       practiceInput(m);
       return;
     }
     // With "Select keys" off, clicking just plays the note (a brief press shows which key)
     if (!$("select-mode").checked) {
-      playNotes([m], true);
+      playNotes([m]);
       flashKey(m);
       return;
     }
@@ -612,6 +899,8 @@
 
   function setOverlay(o) {
     overlay = o;
+    // Any other highlight replaces the song's key
+    if (!o || !o.songKey) $("show-key").checked = false;
     render();
   }
 
@@ -806,6 +1095,13 @@
     renderResult();
   }
 
+  // With "Highlights in all octaves" off, a scale shows one octave: root to root, around middle C
+  function inOverlayRange(m) {
+    if ($("all-octaves").checked || overlay.tonic == null) return true;
+    const base = 60 + overlay.tonic - (overlay.tonic > 6 ? 12 : 0);
+    return m >= base && m <= base + 12;
+  }
+
   function renderKeys() {
     for (const [mStr, el] of Object.entries(keyEls)) {
       const m = +mStr;
@@ -814,7 +1110,7 @@
       if (overlay) {
         if (overlay.midis) hl = overlay.midis.has(m);
         else if (overlay.pcs) {
-          hl = overlay.pcs.has(m % 12);
+          hl = overlay.pcs.has(m % 12) && inOverlayRange(m);
           tonic = hl && overlay.tonic === m % 12;
         }
       }
@@ -836,10 +1132,16 @@
 
   let lastInversions = null;
 
+  // Collapsible result section; open/closed state is remembered per section
+  function section(key, title, body, openByDefault = true) {
+    const open = ui.sec[key] ?? openByDefault;
+    return `<details class="sec" data-sec="${key}"${open ? " open" : ""}><summary>${iconSvg("caret-down")}${title}</summary><div class="sec-body">${body}</div></details>`;
+  }
+
   function renderResult() {
     const midis = [...selected].sort((a, b) => a - b);
     if (!midis.length) {
-      resultEl.innerHTML = '<div class="empty">No notes selected. Click keys, play a MIDI keyboard, or pick something below.</div>';
+      resultEl.innerHTML = '<div class="empty">No notes selected. Click keys on the piano, play a MIDI keyboard, or pick a chord, scale or key.</div>';
       return;
     }
 
@@ -848,7 +1150,8 @@
     const chromas = [...new Set(midis.map(m => m % 12))];
     const bass = midis[0];
 
-    let html = `<div class="notes">${midis.map(m => pc(m) + octaveOf(m)).join(" · ")}</div>`;
+    let html = `<div class="result-head"><div class="notes">${midis.map(m => pc(m) + octaveOf(m)).join(" · ")}</div>`;
+    let secs = "";
     let mainChord = null;
 
     if (pcs.length === 1) {
@@ -862,21 +1165,20 @@
         mainChord = { name: found[0], chord: c };
         html += `<div class="chord">${prettySymbol(found[0])}</div><div class="chord-name">${c.name}</div>`;
         if (found.length > 1) {
-          html += '<div class="section-title">Could also be</div><div class="chips">' +
-            found.slice(1).map(n => `<span class="chip">${prettySymbol(n)}</span>`).join("") + "</div>";
+          secs += section("alt", "Could also be", '<div class="chips">' +
+            found.slice(1).map(n => `<span class="chip">${prettySymbol(n)}</span>`).join("") + "</div>");
         }
       } else {
         html += `<div class="chord">?</div><div class="chord-name">No standard chord name for these notes</div>`;
       }
     }
 
+    html += "</div>";
+
     // Intervals from the bass
     if (midis.length > 1) {
-      html += '<div class="section-title">Intervals from the bass (' + pc(bass) + octaveOf(bass) + ')</div><div class="intervals">';
-      for (const m of midis.slice(1)) {
-        html += `<span>${pc(m)}${octaveOf(m)}</span><span>${intervalName(m - bass)}</span>`;
-      }
-      html += "</div>";
+      secs += section("intervals", `Intervals from the bass (${pc(bass)}${octaveOf(bass)})`, '<div class="intervals">' +
+        midis.slice(1).map(m => `<span>${pc(m)}${octaveOf(m)}</span><span>${intervalName(m - bass)}</span>`).join("") + "</div>");
     }
 
     // Inversions
@@ -889,11 +1191,11 @@
         lastInversions = type.iv.map((_, k) => voicing(rootC, type, k, base));
         const labels = ["Root position", "1st inversion", "2nd inversion", "3rd inversion"];
         const current = midis.join(",");
-        html += '<div class="section-title">Inversions</div><div class="chips">' +
+        secs += section("inversions", "Inversions", '<div class="chips">' +
           lastInversions.map((v, k) => chip(
             `${chordSymbol(rootC, type, k ? mod12(v[0]) : null)}<small>${labels[k]}</small>`,
             `data-inv="${k}"`, v.join(",") === current ? "active" : "")).join("") +
-          "</div>";
+          "</div>");
       }
 
       // Chord in keys (Roman numerals)
@@ -915,9 +1217,9 @@
         return true;
       });
       if (uniq.length) {
-        html += '<div class="section-title">This chord in keys</div><div class="chips">' +
+        secs += section("inkeys", "This chord in keys", '<div class="chips">' +
           uniq.map(k => chip(`${k.numeral}<small>in ${k.root} ${k.mode}</small>`,
-            `data-scale="${k.root}|${k.mode}"`, "green")).join("") + "</div>";
+            `data-scale="${k.root}|${k.mode}"`, "green")).join("") + "</div>");
       }
     }
 
@@ -931,21 +1233,20 @@
         }
       }
     }
-    html += '<div class="section-title">Keys that contain these notes</div>';
-    html += keys.length
+    secs += section("keys", "Keys that contain these notes", keys.length
       ? '<div class="chips">' + keys.map(k => chip(`${k.root} ${k.type}`, `data-scale="${k.root}|${k.type}"`, "green")).join("") + "</div>"
-      : '<div class="empty">None of the major or minor keys</div>';
+      : '<div class="empty">None of the major or minor keys</div>');
     if (others.length) {
-      html += '<div class="section-title">Other scales</div><div class="chips">' +
-        others.map(k => chip(`${k.root} ${k.type}`, `data-scale="${k.root}|${k.type}"`, "green")).join("") + "</div>";
+      secs += section("scales", "Other scales", '<div class="chips">' +
+        others.map(k => chip(`${k.root} ${k.type}`, `data-scale="${k.root}|${k.type}"`, "green")).join("") + "</div>", false);
     }
 
-    resultEl.innerHTML = html;
+    resultEl.innerHTML = html + secs;
   }
 
-  function showScale(root, type) {
+  function showScale(root, type, extra = {}) {
     const s = scaleData(root, type);
-    setOverlay({ label: `${root} ${type} (${s.notes.join(" ")})`, pcs: new Set(s.chromas), tonic: s.tonic });
+    setOverlay({ label: `${root} ${type} (${s.notes.join(" ")})`, pcs: new Set(s.chromas), tonic: s.tonic, ...extra });
   }
 
   // Delegated clicks for any chip with data attributes
@@ -1157,7 +1458,9 @@
     if (!xmlMeasures.length) { info.innerHTML = ""; return; }
     const split = $("xml-split").value;
     const key = detectKey(xmlMeasures.flatMap(m => m.notes));
-    let html = `<div class="section-title">${esc(xmlTitle)}${key ? " · probably " + pc(key.root) + " " + key.mode : ""}</div><div class="measures">`;
+    songKey = key;
+    $("sheet-key").textContent = key ? `Key: ${pc(key.root)} ${key.mode} (best guess)` : "";
+    let html = `<div class="measures">`;
     xmlMeasures.forEach((m, idx) => {
       const parts = split === "beat" ? Math.max(1, Math.round(m.length / m.beatLen)) : Math.min(+split, Math.max(1, Math.round(m.length / m.beatLen)));
       const segLen = m.length / parts;
@@ -1184,12 +1487,12 @@
   }
 
   let xmlTitle = "";
-  $("xml-file").addEventListener("change", async e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
+  let fileTempo = null; // tempo written in the file, if any
+  // Load MusicXML text into the score, analysis and player (throws if it can't be read)
+  async function loadText(text) {
+    {
       const parsed = parseMusicXML(text);
+      if (!parsed.measures.length) throw new Error("no measures found");
       xmlTitle = parsed.title;
       xmlMeasures = parsed.measures;
       stopPlayback();
@@ -1197,16 +1500,246 @@
       playFromPos = 0;
       loopFrom = loopTo = null;
       loopPick = null;
-      setTempo(parsed.tempo || 100);
+      fileTempo = parsed.tempo || null;
+      setTempo(fileTempo || 100);
+      $("tempo-reset").dataset.tip = fileTempo
+        ? `Reset to ${Math.round(fileTempo)} BPM (the tempo in this file)`
+        : "Reset to 100 BPM (this file has no tempo, so 100 is the default)";
       buildTimeline();
+      $("sheet-title").textContent = parsed.title;
       $("player").hidden = false;
       renderSheet();
       updatePlayFrom();
       await renderScore(text);
+      applySongKey();
+    }
+  }
+
+  // ---------- My sheet music: saved copies in IndexedDB ----------
+  let dbPromise = null;
+  function sheetDb() {
+    return dbPromise ||= new Promise((resolve, reject) => {
+      const r = indexedDB.open("chord-finder", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("sheets", { keyPath: "id", autoIncrement: true });
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+  }
+  const idbReq = r => new Promise((resolve, reject) => { r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
+  const sheetStore = async mode => (await sheetDb()).transaction("sheets", mode).objectStore("sheets");
+  const listSheets = async () => idbReq((await sheetStore("readonly")).getAll());
+  const putSheet = async rec => idbReq((await sheetStore("readwrite")).put(rec));
+  const deleteSheet = async id => idbReq((await sheetStore("readwrite")).delete(id));
+
+  let sheets = [];            // cached list for the panel
+  let currentSheetId = null;
+  let libWasCollapsed = false; // sidebar state to restore when the panel closes
+  let confirmDeleteId = null, renamingId = null;
+
+  // Same name as an existing sheet: add " (2)", " (3)", ... instead of replacing it
+  function uniqueName(name, exceptId = null) {
+    const taken = new Set(sheets.filter(x => x.id !== exceptId).map(x => x.name.toLowerCase()));
+    if (!taken.has(name.toLowerCase())) return name;
+    let n = 2;
+    while (taken.has(`${name} (${n})`.toLowerCase())) n++;
+    return `${name} (${n})`;
+  }
+
+  const fmtDate = iso => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+  async function refreshLibrary() {
+    try { sheets = await listSheets(); }
+    catch (err) { $("lib-msg").textContent = "Saved sheets aren't available in this browser: " + err.message; sheets = []; }
+    renderLibrary();
+  }
+
+  function renderLibrary() {
+    const q = $("lib-search").value.trim().toLowerCase();
+    const shown = sheets.filter(x => x.name.toLowerCase().includes(q)).sort((a, b) => (b.opened || b.added).localeCompare(a.opened || a.added));
+    $("lib-list").innerHTML = !sheets.length
+      ? '<div class="lib-empty">No saved sheet music yet. Add a file to get started.</div>'
+      : !shown.length ? '<div class="lib-empty">Nothing matches your search.</div>'
+      : shown.map(x => `<div class="lib-item${x.id === currentSheetId ? " current" : ""}" data-id="${x.id}">` +
+          (x.id === renamingId
+            ? `<input class="lib-rename" value="${esc(x.name)}" data-rename="${x.id}">
+               <button class="icon-btn small" data-rename-save="${x.id}" data-tip="Save name (Enter)">${iconSvg("check")}</button>`
+            : `<button class="lib-open" data-open="${x.id}" data-tip="Open ${esc(x.name)}">
+                 <span class="lib-name">${esc(x.name)}</span>
+                 <span class="lib-meta">Added ${fmtDate(x.added)}</span>
+               </button>
+               <button class="icon-btn small" data-rename-start="${x.id}" data-tip="Rename">${iconSvg("pencil-simple")}</button>
+               <button class="icon-btn small${confirmDeleteId === x.id ? " confirm" : ""}" data-delete="${x.id}"
+                 data-tip="${confirmDeleteId === x.id ? "Click again to delete this saved copy" : "Delete this saved copy (the original file isn't touched)"}">${iconSvg("trash")}</button>`) +
+        "</div>").join("");
+    const input = $("lib-list").querySelector(".lib-rename");
+    if (input) { input.focus(); input.select(); }
+  }
+
+  function openLibrary() {
+    const view = $("view-sheet");
+    libWasCollapsed = view.classList.contains("collapsed");
+    view.classList.remove("collapsed");
+    $("sidebar-toggle").classList.add("active");
+    $("sidebar").classList.add("library-open");
+    $("library").hidden = false;
+    $("lib-msg").textContent = "";
+    $("lib-search").value = "";
+    confirmDeleteId = renamingId = null;
+    refreshLibrary();
+    requestAnimationFrame(checkScoreSize);
+  }
+
+  // Put the sidebar back the way it was before the panel opened
+  function closeLibrary() {
+    if ($("library").hidden) return;
+    $("library").hidden = true;
+    $("sidebar").classList.remove("library-open");
+    if (libWasCollapsed) $("view-sheet").classList.add("collapsed");
+    $("sidebar-toggle").classList.toggle("active", !libWasCollapsed);
+    requestAnimationFrame(checkScoreSize);
+  }
+
+  async function openSheet(rec) {
+    try {
+      await loadText(rec.text);
+      currentSheetId = rec.id;
+      $("sheet-title").textContent = rec.name;
+      rec.opened = new Date().toISOString();
+      putSheet(rec).catch(() => {});
+      closeLibrary();
     } catch (err) {
-      $("xml-info").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+      $("lib-msg").textContent = `Could not open "${rec.name}": ${err.message}`;
+    }
+  }
+
+  // Add a file: check it reads as MusicXML, save a copy (never replacing), then open it
+  async function addFile(file) {
+    try {
+      const text = await file.text();
+      parseMusicXML(text);
+      await refreshLibrary();
+      const now = new Date().toISOString();
+      const rec = { name: uniqueName(file.name.replace(/\.(musicxml|xml)$/i, "") || "Untitled"), added: now, opened: now, text };
+      rec.id = await putSheet(rec);
+      navigator.storage?.persist?.().catch(() => {});
+      sheets.push(rec);
+      await openSheet(rec);
+    } catch (err) {
+      const msg = `Could not add "${file.name}": ${err.message}`;
+      if (!$("library").hidden) { $("lib-msg").textContent = msg; renderLibrary(); }
+      else $("sheet-key").textContent = msg;
+    }
+  }
+
+  // Reset app: two clicks, then wipe saved UI state and the sheet database and reload
+  let resetArmed = false;
+  $("reset-app").addEventListener("click", async () => {
+    const btn = $("reset-app");
+    if (!resetArmed) {
+      resetArmed = true;
+      btn.classList.add("confirm");
+      btn.textContent = "Click again to erase everything";
+      setTimeout(() => { resetArmed = false; btn.classList.remove("confirm"); btn.textContent = "Reset app"; }, 4000);
+      return;
+    }
+    try { localStorage.removeItem("chord-finder-ui"); } catch (e) {}
+    try {
+      if (dbPromise) (await dbPromise).close();
+      await new Promise(r => { const d = indexedDB.deleteDatabase("chord-finder"); d.onsuccess = d.onerror = d.onblocked = r; });
+    } catch (e) {}
+    location.reload();
+  });
+
+  // Unload the current sheet and go back to the empty drop zone
+  function closeSheet() {
+    stopPlayback();
+    currentSheetId = null;
+    osmd = null;
+    cursorTimes = [];
+    cursorIdx = -1;
+    scoreWidth = 0;
+    xmlMeasures = [];
+    timeline = [];
+    totalLen = 0;
+    loopFrom = loopTo = null;
+    setPickMode(null);
+    songKey = null;
+    if (overlay && (overlay.songKey || overlay.midis)) setOverlay(null);
+    $("score").innerHTML = "";
+    $("score").hidden = true;
+    $("dropzone").hidden = false;
+    $("player").hidden = true;
+    $("sheet-title").textContent = "";
+    $("sheet-key").textContent = "";
+    renderSheet();
+  }
+
+  async function finishRename(id, save) {
+    const input = $("lib-list").querySelector(".lib-rename");
+    const rec = sheets.find(x => x.id === id);
+    renamingId = null;
+    if (save && rec && input && input.value.trim()) {
+      rec.name = uniqueName(input.value.trim(), id);
+      await putSheet(rec);
+      if (id === currentSheetId) $("sheet-title").textContent = rec.name;
+    }
+    renderLibrary();
+  }
+
+  $("xml-file").addEventListener("change", e => {
+    if (e.target.files[0]) addFile(e.target.files[0]);
+    e.target.value = ""; // allow adding the same file again
+  });
+  $("open-file").addEventListener("click", () => ($("library").hidden ? openLibrary() : closeLibrary()));
+  $("dropzone").addEventListener("click", openLibrary);
+  $("lib-close").addEventListener("click", closeLibrary);
+  $("lib-add").addEventListener("click", () => $("xml-file").click());
+  $("lib-search").addEventListener("input", renderLibrary);
+  $("lib-list").addEventListener("click", async e => {
+    const t = e.target.closest("button");
+    if (!t) return;
+    const id = +(t.dataset.open || t.dataset.renameStart || t.dataset.renameSave || t.dataset.delete);
+    const rec = sheets.find(x => x.id === id);
+    if (t.dataset.open && rec) openSheet(rec);
+    else if (t.dataset.renameStart) { renamingId = id; confirmDeleteId = null; renderLibrary(); }
+    else if (t.dataset.renameSave) finishRename(id, true);
+    else if (t.dataset.delete) {
+      // Two clicks to delete, so a slip doesn't lose a sheet
+      if (confirmDeleteId !== id) { confirmDeleteId = id; renderLibrary(); setTimeout(() => { if (confirmDeleteId === id) { confirmDeleteId = null; renderLibrary(); } }, 3000); return; }
+      confirmDeleteId = null;
+      await deleteSheet(id);
+      sheets = sheets.filter(x => x.id !== id);
+      if (currentSheetId === id) closeSheet();
+      hideTip();
+      renderLibrary();
     }
   });
+  $("lib-list").addEventListener("keydown", e => {
+    if (!e.target.matches(".lib-rename")) return;
+    if (e.key === "Enter") finishRename(+e.target.dataset.rename, true);
+    if (e.key === "Escape") { e.stopPropagation(); finishRename(+e.target.dataset.rename, false); }
+  });
+  window.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !$("library").hidden && !e.target.matches?.(".lib-rename")) closeLibrary();
+  });
+  // Drop a file anywhere on the sheet music view
+  const sheetView = $("view-sheet");
+  sheetView.addEventListener("dragover", e => { e.preventDefault(); $("dropzone").classList.add("over"); });
+  sheetView.addEventListener("dragleave", e => { if (!sheetView.contains(e.relatedTarget)) $("dropzone").classList.remove("over"); });
+  sheetView.addEventListener("drop", e => {
+    e.preventDefault();
+    $("dropzone").classList.remove("over");
+    const file = e.dataTransfer.files[0];
+    if (file) addFile(file);
+  });
+
+  // "Show key": highlight the song's detected key on the piano
+  let songKey = null;
+  function applySongKey() {
+    if ($("show-key").checked && songKey) showScale(ROOTS[songKey.root], songKey.mode, { songKey: true });
+    else if (overlay?.songKey) setOverlay(null);
+  }
+  $("show-key").addEventListener("change", applySongKey);
   $("xml-split").addEventListener("change", renderSheet);
   document.addEventListener("click", e => {
     const b = e.target.closest("[data-seg]");
@@ -1215,6 +1748,7 @@
     const m = xmlMeasures[mi], seg = m.segs[si];
     document.querySelectorAll("[data-seg]").forEach(x => x.classList.toggle("active", x === b));
     overlay = { label: `m${m.number} notes (${b.textContent})`, midis: new Set(seg.notes.map(n => n.midi)) };
+    $("show-key").checked = false;
     // Voice slash chords as the matching inversion so the bass note is lowest
     const { rootC, type, bassC } = seg.fit;
     const k = bassC === null ? 0 : type.iv.findIndex(i => (rootC + i) % 12 === bassC);
@@ -1411,11 +1945,22 @@
     if (playing) pausePlayback();
     else if (pausedAt !== null) { const p = pausedAt; pausedAt = null; startPlayback(p); }
     else {
+      // Clear the blue selection so it doesn't mix with the playback colours
+      selected.clear();
+      render();
       resetStats();
       startPlayback(loopFrom !== null && $("loop").checked ? loopFrom : playFromPos);
     }
   });
   $("xml-stop").addEventListener("click", stopPlayback);
+  $("reset-start").addEventListener("click", () => {
+    if (!xmlMeasures.length) return;
+    playFrom = 0;
+    playFromPos = 0;
+    updatePlayFrom();
+    if (playing) { haltAudio(); startAt(0); }
+    else if (pausedAt !== null) pausedAt = 0;
+  });
   $("tempo").addEventListener("input", e => setTempo(+e.target.value));
 
   // Clicking a measure (chip grid or score) sets the start point and jumps there if playing.
@@ -1477,7 +2022,7 @@
     loopPick = mode;
     $("loop-start").classList.toggle("armed", mode === "start");
     $("loop-end").classList.toggle("armed", mode === "end");
-    $("tab-sheet").classList.toggle("picking", !!mode);
+    $("view-sheet").classList.toggle("picking", !!mode);
     $("score").classList.toggle("picking", !!mode);
     updateLoopMarks();
   }
@@ -1546,12 +2091,14 @@
     if (!window.opensheetmusicdisplay) return;
     // Must be visible before OSMD measures the container width
     el.hidden = false;
+    $("dropzone").hidden = true;
     osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(el, {
-      backend: "svg", autoResize: true, drawTitle: true, followCursor: false,
+      backend: "svg", autoResize: false, drawTitle: true, followCursor: false,
       cursorsOptions: [{ type: 0, color: "#ee8a1f", alpha: 0.55, follow: false }],
     });
     await osmd.load(text);
     osmd.render();
+    scoreWidth = el.clientWidth;
     indexCursor();
     moveCursor(playFromPos);
     setPickMode(null);
@@ -1593,17 +2140,24 @@
     }
   }
 
-  // autoResize re-renders the score on window resize, which resets the cursor
-  let resizeTimer = null;
-  window.addEventListener("resize", () => {
+  // Re-render the score when its box changes width (window resize, sidebar toggle, view switch).
+  // A hidden view has zero width, so it re-renders when it becomes visible again.
+  let scoreWidth = 0, resizeTimer = null;
+  // Watch the wrapper: the score box itself can be held wide by its old content
+  new ResizeObserver(checkScoreSize).observe($("score").parentElement);
+  function checkScoreSize() {
+    const w = $("score").clientWidth;
+    if (!osmd || !w || Math.abs(w - scoreWidth) < 2) return;
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-      if (!osmd) return;
+      scoreWidth = $("score").clientWidth;
+      if (!scoreWidth) return;
+      osmd.render();
       indexCursor();
       moveCursor(playing ? position() : playFromPos);
       drawScoreMarks();
-    }, 400);
-  });
+    }, 150);
+  }
 
 
   // ---------- Score measure boxes (click targets and loop shading) ----------
@@ -1827,7 +2381,8 @@
 
   // ---------- Bottom bar UI: icons, tooltips, pop-outs ----------
   // Phosphor icons (MIT, phosphoricons.com), inlined so the page works offline
-  const ICONS = {"play":"<path d=\"M240,128a15.74,15.74,0,0,1-7.6,13.51L88.32,229.65a16,16,0,0,1-16.2.3A15.86,15.86,0,0,1,64,216.13V39.87a15.86,15.86,0,0,1,8.12-13.82,16,16,0,0,1,16.2.3L232.4,114.49A15.74,15.74,0,0,1,240,128Z\"/>","pause":"<path d=\"M216,48V208a16,16,0,0,1-16,16H160a16,16,0,0,1-16-16V48a16,16,0,0,1,16-16h40A16,16,0,0,1,216,48ZM96,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H96a16,16,0,0,0,16-16V48A16,16,0,0,0,96,32Z\"/>","stop":"<path d=\"M216,56V200a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V56A16,16,0,0,1,56,40H200A16,16,0,0,1,216,56Z\"/>","metronome":"<path d=\"M187.14,114.84l26.78-29.46a8,8,0,0,0-11.84-10.76l-20.55,22.6-17.2-54.07A15.94,15.94,0,0,0,149.08,32H106.91A15.94,15.94,0,0,0,91.66,43.15l-50.91,160A16,16,0,0,0,56,224H200a16,16,0,0,0,15.25-20.85ZM184.72,160H146.08l28.62-31.48ZM106.91,48h42.17l20,62.9L124.46,160H71.27ZM56,208l10.18-32H189.81L200,208Z\"/>","speaker-high":"<path d=\"M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55Zm54-106.08a40,40,0,0,1,0,52.88,8,8,0,0,1-12-10.58,24,24,0,0,0,0-31.72,8,8,0,0,1,12-10.58ZM248,128a79.9,79.9,0,0,1-20.37,53.34,8,8,0,0,1-11.92-10.67,64,64,0,0,0,0-85.33,8,8,0,1,1,11.92-10.67A79.83,79.83,0,0,1,248,128Z\"/>","speaker-low":"<path d=\"M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55ZM208,128a39.93,39.93,0,0,1-10,26.46,8,8,0,0,1-12-10.58,24,24,0,0,0,0-31.72,8,8,0,1,1,12-10.58A40,40,0,0,1,208,128Z\"/>","speaker-x":"<path d=\"M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55Zm101.66-61.3a8,8,0,0,1-11.32,11.32L216,139.31l-18.34,18.35a8,8,0,0,1-11.32-11.32L204.69,128l-18.35-18.34a8,8,0,0,1,11.32-11.32L216,116.69l18.34-18.35a8,8,0,0,1,11.32,11.32L227.31,128Z\"/>","repeat":"<path d=\"M24,128A72.08,72.08,0,0,1,96,56H204.69L194.34,45.66a8,8,0,0,1,11.32-11.32l24,24a8,8,0,0,1,0,11.32l-24,24a8,8,0,0,1-11.32-11.32L204.69,72H96a56.06,56.06,0,0,0-56,56,8,8,0,0,1-16,0Zm200-8a8,8,0,0,0-8,8,56.06,56.06,0,0,1-56,56H51.31l10.35-10.34a8,8,0,0,0-11.32-11.32l-24,24a8,8,0,0,0,0,11.32l24,24a8,8,0,0,0,11.32-11.32L51.31,200H160a72.08,72.08,0,0,0,72-72A8,8,0,0,0,224,120Z\"/>","flag":"<path d=\"M42.76,50A8,8,0,0,0,40,56V224a8,8,0,0,0,16,0V179.77c26.79-21.16,49.87-9.75,76.45,3.41,16.4,8.11,34.06,16.85,53,16.85,13.93,0,28.54-4.75,43.82-18a8,8,0,0,0,2.76-6V56A8,8,0,0,0,218.76,50c-28,24.23-51.72,12.49-79.21-1.12C111.07,34.76,78.78,18.79,42.76,50ZM216,172.25c-26.79,21.16-49.87,9.74-76.45-3.41-25-12.35-52.81-26.13-83.55-8.4V59.79c26.79-21.16,49.87-9.75,76.45,3.4,25,12.35,52.82,26.13,83.55,8.4Z\"/>","flag-checkered":"<path d=\"M227.32,48.75A8,8,0,0,0,218.76,50c-28,24.22-51.72,12.48-79.21-1.13C111.07,34.76,78.78,18.79,42.76,50A8,8,0,0,0,40,56V224a8,8,0,0,0,16,0V179.77c26.79-21.16,49.87-9.75,76.45,3.41,28.49,14.09,60.77,30.06,96.79-1.13a8,8,0,0,0,2.76-6V56A8,8,0,0,0,227.32,48.75ZM216,71.6v40.65c-14,11.06-27,13.22-40,10.88V79.34A60.05,60.05,0,0,0,216,71.6Zm-56,3.76v43c-6.66-2.67-13.43-6-20.45-9.48-8.82-4.37-18-8.91-27.55-12.18v-43c6.66,2.66,13.43,6,20.45,9.48C141.27,67.55,150.46,72.09,160,75.36ZM96,48.91V92.69a60.06,60.06,0,0,0-40,7.75V59.78C70,48.72,83,46.57,96,48.91ZM86.58,152A60.06,60.06,0,0,0,56,160.43V119.78c14-11.06,27-13.22,40-10.88v43.8A65.61,65.61,0,0,0,86.58,152ZM112,156.67v-43c6.66,2.66,13.43,6,20.45,9.48,8.82,4.37,18,8.9,27.55,12.17v43c-6.66-2.67-13.43-6-20.45-9.48C130.73,164.47,121.54,159.94,112,156.67Zm64,26.45v-43.8a65.61,65.61,0,0,0,9.42.72A60.11,60.11,0,0,0,216,131.57v40.68C202,183.31,189,185.46,176,183.12Z\"/>","x-circle":"<path d=\"M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z\"/>","map-pin":"<path d=\"M128,64a40,40,0,1,0,40,40A40,40,0,0,0,128,64Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,128Zm0-112a88.1,88.1,0,0,0-88,88c0,31.4,14.51,64.68,42,96.25a254.19,254.19,0,0,0,41.45,38.3,8,8,0,0,0,9.18,0A254.19,254.19,0,0,0,174,200.25c27.45-31.57,42-64.85,42-96.25A88.1,88.1,0,0,0,128,16Zm0,206c-16.53-13-72-60.75-72-118a72,72,0,0,1,144,0C200,161.23,144.53,209,128,222Z\"/>","hand":"<path d=\"M188,48a27.75,27.75,0,0,0-12,2.71V44a28,28,0,0,0-54.65-8.6A28,28,0,0,0,80,60v64l-3.82-6.13a28,28,0,0,0-48.6,27.82c16,33.77,28.93,57.72,43.72,72.69C86.24,233.54,103.2,240,128,240a88.1,88.1,0,0,0,88-88V76A28,28,0,0,0,188,48Zm12,104a72.08,72.08,0,0,1-72,72c-20.38,0-33.51-4.88-45.33-16.85C69.44,193.74,57.26,171,41.9,138.58a6.36,6.36,0,0,0-.3-.58,12,12,0,0,1,20.79-12,1.76,1.76,0,0,0,.14.23l18.67,30A8,8,0,0,0,96,152V60a12,12,0,0,1,24,0v60a8,8,0,0,0,16,0V44a12,12,0,0,1,24,0v76a8,8,0,0,0,16,0V76a12,12,0,0,1,24,0Z\"/>","hourglass":"<path d=\"M200,75.64V40a16,16,0,0,0-16-16H72A16,16,0,0,0,56,40V76a16.07,16.07,0,0,0,6.4,12.8L114.67,128,62.4,167.2A16.07,16.07,0,0,0,56,180v36a16,16,0,0,0,16,16H184a16,16,0,0,0,16-16V180.36a16.09,16.09,0,0,0-6.35-12.77L141.27,128l52.38-39.6A16.05,16.05,0,0,0,200,75.64ZM184,216H72V180l56-42,56,42.35Zm0-140.36L128,118,72,76V40H184Z\"/>","arrows-vertical":"<path d=\"M165.66,194.34a8,8,0,0,1,0,11.32l-32,32a8,8,0,0,1-11.32,0l-32-32a8,8,0,0,1,11.32-11.32L120,212.69V43.31L101.66,61.66A8,8,0,0,1,90.34,50.34l32-32a8,8,0,0,1,11.32,0l32,32a8,8,0,0,1-11.32,11.32L136,43.31V212.69l18.34-18.35A8,8,0,0,1,165.66,194.34Z\"/>","target":"<path d=\"M221.87,83.16A104.1,104.1,0,1,1,195.67,49l22.67-22.68a8,8,0,0,1,11.32,11.32l-96,96a8,8,0,0,1-11.32-11.32l27.72-27.72a40,40,0,1,0,17.87,31.09,8,8,0,1,1,16-.9,56,56,0,1,1-22.38-41.65L184.3,60.39a87.88,87.88,0,1,0,23.13,29.67,8,8,0,0,1,14.44-6.9Z\"/>","minus":"<path d=\"M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z\"/>","plus":"<path d=\"M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z\"/>"};
+  const ICONS = {"play":"<path d=\"M240,128a15.74,15.74,0,0,1-7.6,13.51L88.32,229.65a16,16,0,0,1-16.2.3A15.86,15.86,0,0,1,64,216.13V39.87a15.86,15.86,0,0,1,8.12-13.82,16,16,0,0,1,16.2.3L232.4,114.49A15.74,15.74,0,0,1,240,128Z\"/>","pause":"<path d=\"M216,48V208a16,16,0,0,1-16,16H160a16,16,0,0,1-16-16V48a16,16,0,0,1,16-16h40A16,16,0,0,1,216,48ZM96,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H96a16,16,0,0,0,16-16V48A16,16,0,0,0,96,32Z\"/>","stop":"<path d=\"M216,56V200a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V56A16,16,0,0,1,56,40H200A16,16,0,0,1,216,56Z\"/>","metronome":"<path d=\"M187.14,114.84l26.78-29.46a8,8,0,0,0-11.84-10.76l-20.55,22.6-17.2-54.07A15.94,15.94,0,0,0,149.08,32H106.91A15.94,15.94,0,0,0,91.66,43.15l-50.91,160A16,16,0,0,0,56,224H200a16,16,0,0,0,15.25-20.85ZM184.72,160H146.08l28.62-31.48ZM106.91,48h42.17l20,62.9L124.46,160H71.27ZM56,208l10.18-32H189.81L200,208Z\"/>","speaker-high":"<path d=\"M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55Zm54-106.08a40,40,0,0,1,0,52.88,8,8,0,0,1-12-10.58,24,24,0,0,0,0-31.72,8,8,0,0,1,12-10.58ZM248,128a79.9,79.9,0,0,1-20.37,53.34,8,8,0,0,1-11.92-10.67,64,64,0,0,0,0-85.33,8,8,0,1,1,11.92-10.67A79.83,79.83,0,0,1,248,128Z\"/>","speaker-low":"<path d=\"M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55ZM208,128a39.93,39.93,0,0,1-10,26.46,8,8,0,0,1-12-10.58,24,24,0,0,0,0-31.72,8,8,0,1,1,12-10.58A40,40,0,0,1,208,128Z\"/>","speaker-x":"<path d=\"M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55Zm101.66-61.3a8,8,0,0,1-11.32,11.32L216,139.31l-18.34,18.35a8,8,0,0,1-11.32-11.32L204.69,128l-18.35-18.34a8,8,0,0,1,11.32-11.32L216,116.69l18.34-18.35a8,8,0,0,1,11.32,11.32L227.31,128Z\"/>","repeat":"<path d=\"M24,128A72.08,72.08,0,0,1,96,56H204.69L194.34,45.66a8,8,0,0,1,11.32-11.32l24,24a8,8,0,0,1,0,11.32l-24,24a8,8,0,0,1-11.32-11.32L204.69,72H96a56.06,56.06,0,0,0-56,56,8,8,0,0,1-16,0Zm200-8a8,8,0,0,0-8,8,56.06,56.06,0,0,1-56,56H51.31l10.35-10.34a8,8,0,0,0-11.32-11.32l-24,24a8,8,0,0,0,0,11.32l24,24a8,8,0,0,0,11.32-11.32L51.31,200H160a72.08,72.08,0,0,0,72-72A8,8,0,0,0,224,120Z\"/>","flag":"<path d=\"M42.76,50A8,8,0,0,0,40,56V224a8,8,0,0,0,16,0V179.77c26.79-21.16,49.87-9.75,76.45,3.41,16.4,8.11,34.06,16.85,53,16.85,13.93,0,28.54-4.75,43.82-18a8,8,0,0,0,2.76-6V56A8,8,0,0,0,218.76,50c-28,24.23-51.72,12.49-79.21-1.12C111.07,34.76,78.78,18.79,42.76,50ZM216,172.25c-26.79,21.16-49.87,9.74-76.45-3.41-25-12.35-52.81-26.13-83.55-8.4V59.79c26.79-21.16,49.87-9.75,76.45,3.4,25,12.35,52.82,26.13,83.55,8.4Z\"/>","flag-checkered":"<path d=\"M227.32,48.75A8,8,0,0,0,218.76,50c-28,24.22-51.72,12.48-79.21-1.13C111.07,34.76,78.78,18.79,42.76,50A8,8,0,0,0,40,56V224a8,8,0,0,0,16,0V179.77c26.79-21.16,49.87-9.75,76.45,3.41,28.49,14.09,60.77,30.06,96.79-1.13a8,8,0,0,0,2.76-6V56A8,8,0,0,0,227.32,48.75ZM216,71.6v40.65c-14,11.06-27,13.22-40,10.88V79.34A60.05,60.05,0,0,0,216,71.6Zm-56,3.76v43c-6.66-2.67-13.43-6-20.45-9.48-8.82-4.37-18-8.91-27.55-12.18v-43c6.66,2.66,13.43,6,20.45,9.48C141.27,67.55,150.46,72.09,160,75.36ZM96,48.91V92.69a60.06,60.06,0,0,0-40,7.75V59.78C70,48.72,83,46.57,96,48.91ZM86.58,152A60.06,60.06,0,0,0,56,160.43V119.78c14-11.06,27-13.22,40-10.88v43.8A65.61,65.61,0,0,0,86.58,152ZM112,156.67v-43c6.66,2.66,13.43,6,20.45,9.48,8.82,4.37,18,8.9,27.55,12.17v43c-6.66-2.67-13.43-6-20.45-9.48C130.73,164.47,121.54,159.94,112,156.67Zm64,26.45v-43.8a65.61,65.61,0,0,0,9.42.72A60.11,60.11,0,0,0,216,131.57v40.68C202,183.31,189,185.46,176,183.12Z\"/>","x-circle":"<path d=\"M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z\"/>","map-pin":"<path d=\"M128,64a40,40,0,1,0,40,40A40,40,0,0,0,128,64Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,128Zm0-112a88.1,88.1,0,0,0-88,88c0,31.4,14.51,64.68,42,96.25a254.19,254.19,0,0,0,41.45,38.3,8,8,0,0,0,9.18,0A254.19,254.19,0,0,0,174,200.25c27.45-31.57,42-64.85,42-96.25A88.1,88.1,0,0,0,128,16Zm0,206c-16.53-13-72-60.75-72-118a72,72,0,0,1,144,0C200,161.23,144.53,209,128,222Z\"/>","hand":"<path d=\"M188,48a27.75,27.75,0,0,0-12,2.71V44a28,28,0,0,0-54.65-8.6A28,28,0,0,0,80,60v64l-3.82-6.13a28,28,0,0,0-48.6,27.82c16,33.77,28.93,57.72,43.72,72.69C86.24,233.54,103.2,240,128,240a88.1,88.1,0,0,0,88-88V76A28,28,0,0,0,188,48Zm12,104a72.08,72.08,0,0,1-72,72c-20.38,0-33.51-4.88-45.33-16.85C69.44,193.74,57.26,171,41.9,138.58a6.36,6.36,0,0,0-.3-.58,12,12,0,0,1,20.79-12,1.76,1.76,0,0,0,.14.23l18.67,30A8,8,0,0,0,96,152V60a12,12,0,0,1,24,0v60a8,8,0,0,0,16,0V44a12,12,0,0,1,24,0v76a8,8,0,0,0,16,0V76a12,12,0,0,1,24,0Z\"/>","hourglass":"<path d=\"M200,75.64V40a16,16,0,0,0-16-16H72A16,16,0,0,0,56,40V76a16.07,16.07,0,0,0,6.4,12.8L114.67,128,62.4,167.2A16.07,16.07,0,0,0,56,180v36a16,16,0,0,0,16,16H184a16,16,0,0,0,16-16V180.36a16.09,16.09,0,0,0-6.35-12.77L141.27,128l52.38-39.6A16.05,16.05,0,0,0,200,75.64ZM184,216H72V180l56-42,56,42.35Zm0-140.36L128,118,72,76V40H184Z\"/>","arrows-vertical":"<path d=\"M165.66,194.34a8,8,0,0,1,0,11.32l-32,32a8,8,0,0,1-11.32,0l-32-32a8,8,0,0,1,11.32-11.32L120,212.69V43.31L101.66,61.66A8,8,0,0,1,90.34,50.34l32-32a8,8,0,0,1,11.32,0l32,32a8,8,0,0,1-11.32,11.32L136,43.31V212.69l18.34-18.35A8,8,0,0,1,165.66,194.34Z\"/>","target":"<path d=\"M221.87,83.16A104.1,104.1,0,1,1,195.67,49l22.67-22.68a8,8,0,0,1,11.32,11.32l-96,96a8,8,0,0,1-11.32-11.32l27.72-27.72a40,40,0,1,0,17.87,31.09,8,8,0,1,1,16-.9,56,56,0,1,1-22.38-41.65L184.3,60.39a87.88,87.88,0,1,0,23.13,29.67,8,8,0,0,1,14.44-6.9Z\"/>","minus":"<path d=\"M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z\"/>","plus":"<path d=\"M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z\"/>","books":"<path d=\"M231.65,194.55,198.46,36.75a16,16,0,0,0-19-12.39L132.65,34.42a16.08,16.08,0,0,0-12.3,19l33.19,157.8A16,16,0,0,0,169.16,224a16.25,16.25,0,0,0,3.38-.36l46.81-10.06A16.09,16.09,0,0,0,231.65,194.55ZM136,50.15c0-.06,0-.09,0-.09l46.8-10,3.33,15.87L139.33,66Zm6.62,31.47,46.82-10.05,3.34,15.9L146,97.53Zm6.64,31.57,46.82-10.06,13.3,63.24-46.82,10.06ZM216,197.94l-46.8,10-3.33-15.87L212.67,182,216,197.85C216,197.91,216,197.94,216,197.94ZM104,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V48A16,16,0,0,0,104,32ZM56,48h48V64H56Zm0,32h48v96H56Zm48,128H56V192h48v16Z\"/>","music-notes":"<path d=\"M212.92,17.69a8,8,0,0,0-6.86-1.45l-128,32A8,8,0,0,0,72,56V166.08A36,36,0,1,0,88,196V110.25l112-28v51.83A36,36,0,1,0,216,164V24A8,8,0,0,0,212.92,17.69ZM52,216a20,20,0,1,1,20-20A20,20,0,0,1,52,216ZM88,93.75V62.25l112-28v31.5ZM180,184a20,20,0,1,1,20-20A20,20,0,0,1,180,184Z\"/>","gear-six":"<path d=\"M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm109.94-52.79a8,8,0,0,0-3.89-5.4l-29.83-17-.12-33.62a8,8,0,0,0-2.83-6.08,111.91,111.91,0,0,0-36.72-20.67,8,8,0,0,0-6.46.59L128,41.85,97.88,25a8,8,0,0,0-6.47-.6A112.1,112.1,0,0,0,54.73,45.15a8,8,0,0,0-2.83,6.07l-.15,33.65-29.83,17a8,8,0,0,0-3.89,5.4,106.47,106.47,0,0,0,0,41.56,8,8,0,0,0,3.89,5.4l29.83,17,.12,33.62a8,8,0,0,0,2.83,6.08,111.91,111.91,0,0,0,36.72,20.67,8,8,0,0,0,6.46-.59L128,214.15,158.12,231a7.91,7.91,0,0,0,3.9,1,8.09,8.09,0,0,0,2.57-.42,112.1,112.1,0,0,0,36.68-20.73,8,8,0,0,0,2.83-6.07l.15-33.65,29.83-17a8,8,0,0,0,3.89-5.4A106.47,106.47,0,0,0,237.94,107.21Zm-15,34.91-28.57,16.25a8,8,0,0,0-3,3c-.58,1-1.19,2.06-1.81,3.06a7.94,7.94,0,0,0-1.22,4.21l-.15,32.25a95.89,95.89,0,0,1-25.37,14.3L134,199.13a8,8,0,0,0-3.91-1h-.19c-1.21,0-2.43,0-3.64,0a8.08,8.08,0,0,0-4.1,1l-28.84,16.1A96,96,0,0,1,67.88,201l-.11-32.2a8,8,0,0,0-1.22-4.22c-.62-1-1.23-2-1.8-3.06a8.09,8.09,0,0,0-3-3.06l-28.6-16.29a90.49,90.49,0,0,1,0-28.26L61.67,97.63a8,8,0,0,0,3-3c.58-1,1.19-2.06,1.81-3.06a7.94,7.94,0,0,0,1.22-4.21l.15-32.25a95.89,95.89,0,0,1,25.37-14.3L122,56.87a8,8,0,0,0,4.1,1c1.21,0,2.43,0,3.64,0a8.08,8.08,0,0,0,4.1-1l28.84-16.1A96,96,0,0,1,188.12,55l.11,32.2a8,8,0,0,0,1.22,4.22c.62,1,1.23,2,1.8,3.06a8.09,8.09,0,0,0,3,3.06l28.6,16.29A90.49,90.49,0,0,1,222.9,142.12Z\"/>","plugs":"<path d=\"M149.66,138.34a8,8,0,0,0-11.32,0L120,156.69,99.31,136l18.35-18.34a8,8,0,0,0-11.32-11.32L88,124.69,69.66,106.34a8,8,0,0,0-11.32,11.32L64.69,124,41.37,147.31a32,32,0,0,0,0,45.26l5.38,5.37-28.41,28.4a8,8,0,0,0,11.32,11.32l28.4-28.41,5.37,5.38a32,32,0,0,0,45.26,0L132,191.31l6.34,6.35a8,8,0,0,0,11.32-11.32L131.31,168l18.35-18.34A8,8,0,0,0,149.66,138.34Zm-52.29,65a16,16,0,0,1-22.62,0L52.69,181.25a16,16,0,0,1,0-22.62L76,135.31,120.69,180Zm140.29-185a8,8,0,0,0-11.32,0l-28.4,28.41-5.37-5.38a32.05,32.05,0,0,0-45.26,0L124,64.69l-6.34-6.35a8,8,0,0,0-11.32,11.32l80,80a8,8,0,0,0,11.32-11.32L191.31,132l23.32-23.31a32,32,0,0,0,0-45.26l-5.38-5.37,28.41-28.4A8,8,0,0,0,237.66,18.34Zm-34.35,79L180,120.69,135.31,76l23.32-23.31a16,16,0,0,1,22.62,0l22.06,22A16,16,0,0,1,203.31,97.37Z\"/>","plugs-connected":"<path d=\"M237.66,18.34a8,8,0,0,0-11.32,0l-52.4,52.41-5.37-5.38a32.05,32.05,0,0,0-45.26,0L100,88.69l-6.34-6.35A8,8,0,0,0,82.34,93.66L88.69,100,65.37,123.31a32,32,0,0,0,0,45.26l5.38,5.37-52.41,52.4a8,8,0,0,0,11.32,11.32l52.4-52.41,5.37,5.38a32,32,0,0,0,45.26,0L156,167.31l6.34,6.35a8,8,0,0,0,11.32-11.32L167.31,156l23.32-23.31a32,32,0,0,0,0-45.26l-5.38-5.37,52.41-52.4A8,8,0,0,0,237.66,18.34Zm-116.29,161a16,16,0,0,1-22.62,0L76.69,157.25a16,16,0,0,1,0-22.62L100,111.31,144.69,156Zm57.94-57.94L156,144.69,111.31,100l23.32-23.31a16,16,0,0,1,22.62,0l22.06,22A16,16,0,0,1,179.31,121.37ZM88.57,35A8,8,0,0,1,103.43,29l8,20A8,8,0,0,1,96.57,55ZM24.57,93A8,8,0,0,1,35,88.57l20,8A8,8,0,0,1,49,111.43l-20-8A8,8,0,0,1,24.57,93ZM231.43,163a8,8,0,0,1-10.4,4.46l-20-8A8,8,0,1,1,207,144.57l20,8A8,8,0,0,1,231.43,163Zm-64,58.06A8,8,0,0,1,152.57,227l-8-20A8,8,0,0,1,159.43,201Z\"/>","folder-open":"<path d=\"M245,110.64A16,16,0,0,0,232,104H216V88a16,16,0,0,0-16-16H130.67L102.94,51.2a16.14,16.14,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V208h0a8,8,0,0,0,8,8H211.1a8,8,0,0,0,7.59-5.47l28.49-85.47A16.05,16.05,0,0,0,245,110.64ZM93.34,64,123.2,86.4A8,8,0,0,0,128,88h72v16H69.77a16,16,0,0,0-15.18,10.94L40,158.7V64Zm112,136H43.1l26.67-80H232Z\"/>","sidebar-simple":"<path d=\"M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM40,56H80V200H40ZM216,200H96V56H216V200Z\"/>","eraser":"<path d=\"M225,80.4,183.6,39a24,24,0,0,0-33.94,0L31,157.66a24,24,0,0,0,0,33.94l30.06,30.06A8,8,0,0,0,66.74,224H216a8,8,0,0,0,0-16h-84.7L225,114.34A24,24,0,0,0,225,80.4ZM108.68,208H70.05L42.33,180.28a8,8,0,0,1,0-11.31L96,115.31,148.69,168Zm105-105L160,156.69,107.31,104,161,50.34a8,8,0,0,1,11.32,0l41.38,41.38a8,8,0,0,1,0,11.31Z\"/>","x":"<path d=\"M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z\"/>","file-arrow-up":"<path d=\"M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Zm-42.34-77.66a8,8,0,0,1-11.32,11.32L136,139.31V184a8,8,0,0,1-16,0V139.31l-10.34,10.35a8,8,0,0,1-11.32-11.32l24-24a8,8,0,0,1,11.32,0Z\"/>","piano-keys":"<path d=\"M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM80,48h24v88H80Zm32,104a8,8,0,0,0,8-8V48h16v96a8,8,0,0,0,8,8h8v56H104V152Zm40-16V48h24v88ZM48,48H64v96a8,8,0,0,0,8,8H88v56H48ZM208,208H168V152h16a8,8,0,0,0,8-8V48h16V208Z\"/>","highlighter-circle":"<path d=\"M201.54,54.46A104,104,0,0,0,54.46,201.54,104,104,0,0,0,201.54,54.46ZM96,210V152h64v58a88.33,88.33,0,0,1-64,0Zm48-74H112V100.94l32-16Zm46.22,54.22A88.09,88.09,0,0,1,176,201.77V152a16,16,0,0,0-16-16V72a8,8,0,0,0-11.58-7.16l-48,24A8,8,0,0,0,96,96v40a16,16,0,0,0-16,16v49.77a88,88,0,1,1,110.22-11.55Z\"/>","info":"<path d=\"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm16-40a8,8,0,0,1-8,8,16,16,0,0,1-16-16V128a8,8,0,0,1,0-16,16,16,0,0,1,16,16v40A8,8,0,0,1,144,176ZM112,84a12,12,0,1,1,12,12A12,12,0,0,1,112,84Z\"/>","caret-down":"<path d=\"M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z\"/>","cursor-click":"<path d=\"M88,24V16a8,8,0,0,1,16,0v8a8,8,0,0,1-16,0ZM16,104h8a8,8,0,0,0,0-16H16a8,8,0,0,0,0,16ZM124.42,39.16a8,8,0,0,0,10.74-3.58l8-16a8,8,0,0,0-14.31-7.16l-8,16A8,8,0,0,0,124.42,39.16Zm-96,81.69-16,8a8,8,0,0,0,7.16,14.31l16-8a8,8,0,1,0-7.16-14.31ZM219.31,184a16,16,0,0,1,0,22.63l-12.68,12.68a16,16,0,0,1-22.63,0L132.7,168,115,214.09c0,.1-.08.21-.13.32a15.83,15.83,0,0,1-14.6,9.59l-.79,0a15.83,15.83,0,0,1-14.41-11L32.8,52.92A16,16,0,0,1,52.92,32.8L213,85.07a16,16,0,0,1,1.41,29.8l-.32.13L168,132.69ZM208,195.31,156.69,144h0a16,16,0,0,1,4.93-26l.32-.14,45.95-17.64L48,48l52.2,159.86,17.65-46c0-.11.08-.22.13-.33a16,16,0,0,1,11.69-9.34,16.72,16.72,0,0,1,3-.28,16,16,0,0,1,11.3,4.69L195.31,208Z\"/>","arrow-counter-clockwise":"<path d=\"M224,128a96,96,0,0,1-94.71,96H128A95.38,95.38,0,0,1,62.1,197.8a8,8,0,0,1,11-11.63A80,80,0,1,0,71.43,71.39a3.07,3.07,0,0,1-.26.25L44.59,96H72a8,8,0,0,1,0,16H24a8,8,0,0,1-8-8V56a8,8,0,0,1,16,0V85.8L60.25,60A96,96,0,0,1,224,128Z\"/>","pencil-simple":"<path d=\"M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z\"/>","trash":"<path d=\"M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z\"/>","magnifying-glass":"<path d=\"M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z\"/>","plus-circle":"<path d=\"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm48-88a8,8,0,0,1-8,8H136v32a8,8,0,0,1-16,0V136H88a8,8,0,0,1,0-16h32V88a8,8,0,0,1,16,0v32h32A8,8,0,0,1,176,128Z\"/>","check":"<path d=\"M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z\"/>"};
+  const iconSvg = name => `<span class="ic"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor">${ICONS[name]}</svg></span>`;
   function setIcon(el, name) {
     el.dataset.ic = name;
     el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor">${ICONS[name]}</svg>`;
@@ -1863,6 +2418,16 @@
   document.addEventListener("click", () => { if (tipFor) setTimeout(() => tipFor && showTip(tipFor), 0); });
   window.addEventListener("scroll", hideTip, true);
 
+  // Select mode toggle on the piano toolbar: tooltip describes the current mode
+  const syncSelectMode = () => {
+    $("select-mode-btn").dataset.tip = $("select-mode").checked
+      ? "Select mode: clicking keys selects them so the chord is named. Click to switch to play-only"
+      : "Play-only: clicking keys just plays them, the selection stays. Click to select keys again";
+    if (tipFor === $("select-mode-btn")) showTip(tipFor);
+  };
+  $("select-mode").addEventListener("change", syncSelectMode);
+  syncSelectMode();
+
   // Pop-outs open on hover; a click toggles them for touch screens
   document.querySelectorAll(".pop > .icon-btn").forEach(btn => btn.addEventListener("click", () => {
     const pop = btn.parentElement;
@@ -1874,6 +2439,7 @@
   });
   $("tempo-down").addEventListener("click", () => setTempo(Math.max(30, tempo - 5)));
   $("tempo-up").addEventListener("click", () => setTempo(Math.min(220, tempo + 5)));
+  $("tempo-reset").addEventListener("click", () => setTempo(fileTempo || 100));
 
   function updateVolumeIcon() {
     const v = +$("volume").value;
@@ -1913,11 +2479,42 @@
   }
   setPlayState("play");
 
-  // ---------- Bottom playback bar ----------
-  // Pad the page by the bar's height so it never covers the content
-  new ResizeObserver(() => {
-    document.body.style.paddingBottom = $("player").hidden ? "" : $("player").offsetHeight + "px";
-  }).observe($("player"));
+  // ---------- Views, sidebar, remembered UI state ----------
+  $("piano-range").value = ui.range || "4";
+  $("piano-range").addEventListener("change", () => {
+    ui.range = $("piano-range").value;
+    saveUi();
+    buildKeys(ui.range);
+    render();
+  });
+  $("all-octaves").checked = !!ui.allOctaves;
+  $("all-octaves").addEventListener("change", () => { ui.allOctaves = $("all-octaves").checked; saveUi(); renderKeys(); });
+
+  function setView(v) {
+    document.querySelectorAll("#views-nav button").forEach(b => b.classList.toggle("active", b.dataset.view === v));
+    $("view-theory").classList.toggle("active", v === "theory");
+    $("view-sheet").classList.toggle("active", v === "sheet");
+    document.querySelector(".app").classList.toggle("sheet-view", v === "sheet");
+    // One results panel, shown in whichever view is open
+    $(v === "theory" ? "theory-result-slot" : "sheet-result-slot").appendChild(resultEl);
+    ui.view = v;
+    saveUi();
+    requestAnimationFrame(checkScoreSize);
+  }
+  document.querySelectorAll("#views-nav button").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+  $("sidebar-toggle").addEventListener("click", () => {
+    ui.sidebar = !$("view-sheet").classList.toggle("collapsed");
+    $("sidebar-toggle").classList.toggle("active", ui.sidebar);
+    saveUi();
+    requestAnimationFrame(checkScoreSize);
+  });
+  if (ui.sidebar === false) $("view-sheet").classList.add("collapsed");
+  $("sidebar-toggle").classList.toggle("active", ui.sidebar !== false);
+  document.querySelectorAll("details[data-sec]").forEach(d => { if (ui.sec[d.dataset.sec] !== undefined) d.open = ui.sec[d.dataset.sec]; });
+  document.addEventListener("toggle", e => {
+    if (e.target.matches?.("details[data-sec]")) { ui.sec[e.target.dataset.sec] = e.target.open; saveUi(); }
+  }, true);
+  setView(ui.view === "sheet" ? "sheet" : "theory");
 
   // ---------- MIDI input ----------
   const held = new Set();
@@ -1940,16 +2537,19 @@
       held.delete(note);
     }
   }
+  function setMidiStatus(text, connected) {
+    $("midi-status").textContent = text;
+    $("midi-dot").classList.toggle("on", connected);
+    $("midi").dataset.tip = connected ? text : text + " Click to connect a MIDI keyboard (Chrome or Edge).";
+  }
   function attachInputs(access) {
     const inputs = [...access.inputs.values()];
     inputs.forEach(i => i.onmidimessage = onMidiMessage);
-    $("midi-status").textContent = inputs.length
-      ? "Connected: " + inputs.map(i => i.name).join(", ")
-      : "No MIDI device found. Plug one in.";
+    setMidiStatus(inputs.length ? "Connected: " + inputs.map(i => i.name).join(", ") : "No MIDI device found. Plug one in.", inputs.length > 0);
   }
   $("midi").addEventListener("click", async () => {
     if (!navigator.requestMIDIAccess) {
-      $("midi-status").textContent = "This browser has no Web MIDI support (use Chrome or Edge).";
+      setMidiStatus("This browser has no Web MIDI support (use Chrome or Edge).", false);
       return;
     }
     try {
@@ -1957,7 +2557,7 @@
       attachInputs(access);
       access.onstatechange = () => attachInputs(access);
     } catch (err) {
-      $("midi-status").textContent = "MIDI access denied.";
+      setMidiStatus("MIDI access denied.", false);
     }
   });
 
