@@ -81,7 +81,8 @@
   /* ---------- Keyboard strip ---------- */
   .keyboard { padding: 8px 16px 10px; background: var(--panel); border-bottom: 1px solid var(--border); }
   .kb-toolbar { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; min-height: 34px; flex-wrap: wrap; }
-  .legend { margin-left: auto; display: flex; gap: 12px; font-size: 0.78rem; color: var(--muted); }
+  .kb-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .legend { display: flex; gap: 12px; font-size: 0.78rem; color: var(--muted); }
   .legend span { display: inline-flex; align-items: center; gap: 5px; }
   .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
   .app:not(.sheet-view) .legend-play { display: none; }
@@ -555,10 +556,21 @@
         <span id="overlay-label"></span>
         <button id="overlay-clear" class="icon-btn" data-tip="Remove the green highlight"><span class="ic" data-ic="x"></span></button>
       </div>
-      <div class="legend">
-        <span><i style="background: var(--key-on)"></i>Selected</span>
-        <span><i style="background: var(--hl)"></i>Scale / key</span>
-        <span class="legend-play"><i style="background: var(--play)"></i>Playing</span>
+      <div class="kb-right">
+        <div class="legend">
+          <span><i style="background: var(--key-on)"></i>Selected</span>
+          <span><i style="background: var(--hl)"></i>Scale / key</span>
+          <span class="legend-play"><i style="background: var(--play)"></i>Playing</span>
+        </div>
+        <div class="pop down right">
+          <button class="icon-btn small with-value" aria-label="Volume">
+            <span class="ic vol-icon" data-ic="speaker-high"></span><span class="vol-val">80</span><small>%</small>
+          </button>
+          <div class="popover">
+            <div class="pop-title">Volume <span class="muted">all piano sound</span></div>
+            <div class="pop-row"><input type="range" class="vol-range" min="0" max="100" value="80"></div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="piano-wrap" id="piano-wrap"><div class="piano" id="piano"></div></div>
@@ -684,12 +696,12 @@
               </div>
               <div class="pop">
                 <button class="icon-btn with-value" aria-label="Volume">
-                  <span class="ic" data-ic="speaker-high" id="volume-icon"></span><span id="volume-val">80</span><small>%</small>
+                  <span class="ic vol-icon" data-ic="speaker-high"></span><span class="vol-val">80</span><small>%</small>
                 </button>
                 <div class="popover">
-                  <div class="pop-title">Volume <span class="muted">sheet music playback</span></div>
+                  <div class="pop-title">Volume <span class="muted">all piano sound</span></div>
                   <div class="pop-row">
-                    <input type="range" id="volume" min="0" max="100" value="80">
+                    <input type="range" class="vol-range" id="volume" min="0" max="100" value="80">
                   </div>
                 </div>
               </div>
@@ -1052,7 +1064,7 @@
       gain.gain.setValueAtTime(v, t + dur);
     }
     gain.gain.exponentialRampToValueAtTime(0.001, end);
-    src.connect(gain).connect(dest || ctx.destination);
+    src.connect(gain).connect(dest || masterOut());
     src.start(t);
     src.stop(end + 0.05);
     return { gain, oscs: [src], end };
@@ -1075,7 +1087,7 @@
       gain.gain.exponentialRampToValueAtTime(vol * 0.35, t + Math.max(0.02, dur));
       gain.gain.exponentialRampToValueAtTime(0.001, end);
     }
-    gain.connect(dest || ctx.destination);
+    gain.connect(dest || masterOut());
     const oscs = ["triangle", "sine"].map((type, j) => {
       const osc = ctx.createOscillator();
       osc.type = type;
@@ -1983,21 +1995,31 @@
     totalLen = last ? last.start + last.length : 0;
   }
 
-  // Playback goes through its own gain node so the volume slider works mid-song
-  let playbackGain = null;
+  // All sound goes through one master gain, so the volume sliders (piano toolbar and player bar,
+  // kept in sync) control everything and work mid-note. 80% matches the original level.
+  let masterGain = null;
   const volumeLevel = () => 1.5 * Math.pow(+$("volume").value / 100, 2);
-  function playbackOut() {
-    if (!playbackGain) {
-      playbackGain = ctx.createGain();
-      playbackGain.gain.value = volumeLevel();
-      playbackGain.connect(ctx.destination);
+  function masterOut() {
+    if (!masterGain) {
+      masterGain = ctx.createGain();
+      masterGain.gain.value = volumeLevel();
+      masterGain.connect(ctx.destination);
     }
-    return playbackGain;
+    return masterGain;
   }
-  $("volume").addEventListener("input", e => {
-    $("volume-val").textContent = e.target.value;
-    if (playbackGain) playbackGain.gain.setTargetAtTime(volumeLevel(), ctx.currentTime, 0.02);
-  });
+  function setVolume(v) {
+    document.querySelectorAll(".vol-range").forEach(r => { r.value = v; });
+    document.querySelectorAll(".vol-val").forEach(x => { x.textContent = v; });
+    document.querySelectorAll(".vol-icon").forEach(i => setIcon(i, v == 0 ? "speaker-x" : v < 50 ? "speaker-low" : "speaker-high"));
+    if (masterGain) {
+      // Smooth ramp while audio runs; set directly if the audio clock is paused
+      if (ctx.state === "running") masterGain.gain.setTargetAtTime(volumeLevel(), ctx.currentTime, 0.02);
+      else masterGain.gain.value = volumeLevel();
+    }
+    ui.volume = +v;
+    saveUi();
+  }
+  document.querySelectorAll(".vol-range").forEach(r => r.addEventListener("input", () => setVolume(r.value)));
 
   const secPerQ = () => 60 / tempo;
   const position = () => holdAt !== null ? holdAt : anchorPos + (ctx.currentTime - anchorTime) / secPerQ();
@@ -2043,7 +2065,7 @@
       const muted = !$(n.hand === "R" ? "rh" : "lh").checked || (waiting && practiceHands().includes(n.hand));
       if (!muted) {
         const t = anchorTime + (n.onset - anchorPos) * secPerQ();
-        voices.push(tone(n.midi, Math.max(t, ctx.currentTime), 0.16, n.dur * secPerQ() * 0.95, playbackOut()));
+        voices.push(tone(n.midi, Math.max(t, ctx.currentTime), 0.16, n.dur * secPerQ() * 0.95));
       }
     }
     const now = ctx.currentTime;
@@ -2639,11 +2661,7 @@
   $("tempo-up").addEventListener("click", () => setTempo(Math.min(220, tempo + 5)));
   $("tempo-reset").addEventListener("click", () => setTempo(fileTempo || 100));
 
-  function updateVolumeIcon() {
-    const v = +$("volume").value;
-    setIcon($("volume-icon"), v === 0 ? "speaker-x" : v < 50 ? "speaker-low" : "speaker-high");
-  }
-  $("volume").addEventListener("input", updateVolumeIcon);
+  setVolume(ui.volume ?? 80);
 
   // Practice hands: each hand button toggles; both lit = both hands. One always stays lit.
   function syncHands() {
