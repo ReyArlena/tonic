@@ -163,6 +163,13 @@
     </label>
     <label><input type="checkbox" id="select-mode" checked> Select keys</label>
     <label><input type="checkbox" id="sound" checked> Sound</label>
+    <label>Instrument
+      <select id="instrument">
+        <option value="piano">Piano</option>
+        <option value="synth">Synth</option>
+      </select>
+    </label>
+    <span class="status" id="piano-status"></span>
     <button id="midi">Connect MIDI</button>
     <label><input type="checkbox" id="midi-sound"> Synth for MIDI</label>
     <span class="status" id="midi-status"></span>
@@ -244,6 +251,7 @@
 </main>
 
 <script src="tonal.min.js"></script>
+<script src="piano-samples.js"></script>
 <script>
   const { Chord, Scale, Note } = Tonal;
 
@@ -363,9 +371,57 @@
   let ctx;
   const audio = () => (ctx = ctx || new (window.AudioContext || window.webkitAudioContext)());
 
-  // One synth note. With hold, the note sustains for `dur` seconds then releases;
+  // ---------- Piano samples ----------
+  // Salamander Grand Piano, one sample every 3 semitones; other notes are pitch-shifted
+  const SAMPLE_PCS = { C: 0, Ds: 3, Fs: 6, A: 9 };
+  let pianoBuffers = null; // [{ midi, buffer }]
+
+  async function loadPiano() {
+    const src = window.PIANO_SAMPLES;
+    if (!src) { $("piano-status").textContent = "Piano samples missing, using synth"; return; }
+    $("piano-status").textContent = "Loading piano...";
+    try {
+      const list = await Promise.all(Object.entries(src).map(async ([name, b64]) => {
+        const [, n, o] = name.match(/^([A-Z]s?)(\d)$/);
+        const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        return { midi: (+o + 1) * 12 + SAMPLE_PCS[n], buffer: await audio().decodeAudioData(bytes.buffer) };
+      }));
+      pianoBuffers = list.sort((a, b) => a.midi - b.midi);
+      $("piano-status").textContent = "";
+    } catch (err) {
+      $("piano-status").textContent = "Could not load piano, using synth";
+    }
+  }
+
+  function pianoTone(midi, t, vol, dur, dest) {
+    const s = pianoBuffers.reduce((a, b) => Math.abs(b.midi - midi) < Math.abs(a.midi - midi) ? b : a);
+    const src = ctx.createBufferSource();
+    src.buffer = s.buffer;
+    src.playbackRate.value = Math.pow(2, (midi - s.midi) / 12);
+    const gain = ctx.createGain();
+    const v = Math.min(1, vol * 2.5);
+    gain.gain.setValueAtTime(v, t);
+    let end;
+    if (dur === null) {
+      // Let a clicked note ring, then fade
+      end = t + Math.min(3, s.buffer.duration / src.playbackRate.value);
+      gain.gain.setValueAtTime(v, end - 0.5);
+    } else {
+      // Damper: release when the written note ends
+      end = t + dur + 0.3;
+      gain.gain.setValueAtTime(v, t + dur);
+    }
+    gain.gain.exponentialRampToValueAtTime(0.001, end);
+    src.connect(gain).connect(dest || ctx.destination);
+    src.start(t);
+    src.stop(end + 0.05);
+    return { gain, oscs: [src], end };
+  }
+
+  // One note. With dur, the note sustains for `dur` seconds then releases;
   // without, it just decays like a plucked string.
   function tone(midi, t, vol, dur = null, dest = null) {
+    if (pianoBuffers && $("instrument").value === "piano") return pianoTone(midi, t, vol, dur, dest);
     const freq = 440 * Math.pow(2, (midi - 69) / 12);
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, t);
@@ -1132,6 +1188,7 @@
 
   renderChordList();
   render();
+  loadPiano();
 </script>
 </body>
 </html>
