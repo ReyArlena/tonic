@@ -85,6 +85,13 @@
   .key.black:hover { filter: brightness(1.6); }
   .key.pressed { filter: brightness(0.82); transform: scaleY(0.985); }
   .key.black.pressed { filter: brightness(2); }
+  /* Wait mode: keys to play pulse; correct/wrong presses flash */
+  .key.white.target, .key.black.target { background: var(--play); border-color: var(--play); animation: pulse 0.8s ease-in-out infinite alternate; }
+  .key.target .lbl { color: #fff; font-weight: 600; }
+  @keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.3); } }
+  .key.white.good, .key.black.good { background: #2e9e6a; border-color: #2e9e6a; animation: none; }
+  .key.white.bad, .key.black.bad { background: #d64545; border-color: #d64545; animation: none; }
+  .stats { font-weight: 600; font-size: 0.9rem; }
   .key.white.playing, .key.black.playing { background: var(--play); border-color: var(--play); }
   .key.playing .lbl { color: #fff; font-weight: 600; }
   .key.on.hl.tonic { box-shadow: inset 0 -10px 0 var(--hl-strong); }
@@ -262,6 +269,14 @@
         <span class="status" id="loop-info"></span>
         <label><input type="checkbox" id="rh" checked> Right hand sound</label>
         <label><input type="checkbox" id="lh" checked> Left hand sound</label>
+        <label><input type="checkbox" id="wait"> Wait for me</label>
+        <select id="practice-hand" title="Which hand you play in Wait mode">
+          <option value="RL">Practice both hands</option>
+          <option value="R">Practice right hand</option>
+          <option value="L">Practice left hand</option>
+        </select>
+        <label><input type="checkbox" id="any-octave" checked> Any octave</label>
+        <span class="stats" id="practice-stats"></span>
         <span class="status" id="play-from"></span>
       </div>
       <div class="score" id="score" hidden></div>
@@ -332,6 +347,7 @@
   // ---------- State ----------
   const selected = new Set();
   let playingMidis = new Set(); // keys sounding during sheet music playback
+  let targetMidis = new Set();  // keys to play next in Wait mode
   let overlay = null; // { label, pcs: Set<chroma> | null, midis: Set<midi> | null, tonic: chroma | null }
 
   const $ = id => document.getElementById(id);
@@ -388,11 +404,18 @@
     if (!el || +el.dataset.midi === dragKey) return;
     dragKey = +el.dataset.midi;
     playNotes([dragKey], true);
-    flashKey(dragKey);
+    if (waitActive()) practiceInput(dragKey);
+    else flashKey(dragKey);
   });
   ["pointerup", "pointercancel"].forEach(t => window.addEventListener(t, () => { dragKey = null; }));
 
   function toggle(m) {
+    // In Wait mode, keys are answers, not selections
+    if (waitActive()) {
+      playNotes([m], true);
+      practiceInput(m);
+      return;
+    }
     // With "Select keys" off, clicking just plays the note (a brief press shows which key)
     if (!$("select-mode").checked) {
       playNotes([m], true);
@@ -624,8 +647,10 @@
       el.classList.toggle("tonic", tonic);
       const playing = playingMidis.has(m);
       el.classList.toggle("playing", playing);
+      const target = targetMidis.has(m);
+      el.classList.toggle("target", target);
       let label = "";
-      if (on || hl || playing) label = pc(m);
+      if (on || hl || playing || target) label = pc(m);
       else if (m % 12 === 0) label = "C" + octaveOf(m);
       el.querySelector(".lbl").textContent = label;
     }
@@ -1061,7 +1086,7 @@
   });
 
   const secPerQ = () => 60 / tempo;
-  const position = () => anchorPos + (ctx.currentTime - anchorTime) / secPerQ();
+  const position = () => holdAt !== null ? holdAt : anchorPos + (ctx.currentTime - anchorTime) / secPerQ();
 
   function setTempo(bpm) {
     if (playing) { anchorPos = position(); anchorTime = ctx.currentTime; }
@@ -1078,6 +1103,11 @@
     anchorTime = ctx.currentTime + 0.1;
     schedIdx = timeline.findIndex(n => n.onset >= fromPos - 1e-6);
     if (schedIdx === -1) schedIdx = timeline.length;
+    holdAt = null;
+    buildSteps();
+    stepIdx = steps.findIndex(st => st.onset >= fromPos - 1e-6);
+    if (stepIdx === -1) stepIdx = steps.length;
+    hits = new Set();
     $("xml-play").textContent = "Pause";
     schedTimer = setInterval(schedule, 25);
     schedule();
@@ -1090,9 +1120,13 @@
     const horizon = position() + 0.15 / secPerQ();
     const range = loopRange();
     const stopAt = range ? range.to : Infinity;
-    while (schedIdx < timeline.length && timeline[schedIdx].onset < horizon && timeline[schedIdx].onset < stopAt - 1e-6) {
+    const waiting = $("wait").checked;
+    const step = waiting ? steps[stepIdx] : null;
+    // In Wait mode the accompaniment only runs up to the note you have to play next
+    const limit = step ? Math.min(stopAt - 1e-6, step.onset - 1e-6) : stopAt - 1e-6;
+    while (schedIdx < timeline.length && timeline[schedIdx].onset < horizon && timeline[schedIdx].onset < limit) {
       const n = timeline[schedIdx++];
-      const muted = !$(n.hand === "R" ? "rh" : "lh").checked;
+      const muted = !$(n.hand === "R" ? "rh" : "lh").checked || (waiting && practiceHands().includes(n.hand));
       if (!muted) {
         const t = anchorTime + (n.onset - anchorPos) * secPerQ();
         voices.push(tone(n.midi, Math.max(t, ctx.currentTime), 0.16, n.dur * secPerQ() * 0.95, playbackOut()));
@@ -1100,6 +1134,9 @@
     }
     const now = ctx.currentTime;
     voices = voices.filter(v => v.end > now);
+    if (step && holdAt === null && step.onset < stopAt - 1e-6 && position() >= step.onset) {
+      holdAt = step.onset; // stop the clock until the right keys are pressed
+    }
     if (range && position() >= range.to) { haltAudio(); startAt(range.from); }
     else if (!range && position() >= totalLen) stopPlayback();
   }
@@ -1134,6 +1171,8 @@
     cancelAnimationFrame(rafId);
     if (ctx) haltAudio();
     $("xml-play").textContent = "Play";
+    holdAt = null;
+    targetMidis = new Set();
     if (was) { playingMidis = new Set(); renderKeys(); markNow(null); }
   }
 
@@ -1146,8 +1185,13 @@
       if (n.onset > pos) break;
       if (pos < n.onset + n.dur) now.add(n.midi);
     }
-    const key = [...now].join(",");
-    if (key !== [...playingMidis].join(",")) { playingMidis = now; renderKeys(); }
+    const targets = currentTargets();
+    const key = [...now].join(",") + "|" + [...targets].join(",");
+    if (key !== [...playingMidis].join(",") + "|" + [...targetMidis].join(",")) {
+      playingMidis = now;
+      targetMidis = targets;
+      renderKeys();
+    }
     markNow(pos);
     moveCursor(pos);
     rafId = requestAnimationFrame(tick);
@@ -1183,7 +1227,10 @@
     if (!timeline.length) return;
     if (playing) pausePlayback();
     else if (pausedAt !== null) { const p = pausedAt; pausedAt = null; startPlayback(p); }
-    else startPlayback(loopStart !== null && $("loop").checked ? xmlMeasures[loopStart].start : xmlMeasures[playFrom].start);
+    else {
+      resetStats();
+      startPlayback(loopStart !== null && $("loop").checked ? xmlMeasures[loopStart].start : xmlMeasures[playFrom].start);
+    }
   });
   $("xml-stop").addEventListener("click", stopPlayback);
   $("tempo").addEventListener("input", e => setTempo(+e.target.value));
@@ -1389,12 +1436,114 @@
     if (idx !== -1) handleMeasureClick(idx);
   });
 
+
+  // ---------- Wait mode (practice) ----------
+  // The playhead stops at each note of the practice hand(s) until you play it,
+  // on the on-screen piano or a MIDI keyboard.
+  let steps = [];      // [{ onset, midis: [...] }] notes you have to play, grouped by onset
+  let stepIdx = 0;
+  let hits = new Set(); // notes of the current step already played
+  let holdAt = null;    // playhead position while waiting
+  let stats = { correct: 0, wrong: 0 };
+
+  const practiceHands = () => $("practice-hand").value.split("");
+  const waitActive = () => $("wait").checked && playing;
+
+  function buildSteps() {
+    steps = [];
+    const hands = practiceHands();
+    for (const n of timeline) {
+      if (!hands.includes(n.hand)) continue;
+      const last = steps[steps.length - 1];
+      if (last && Math.abs(last.onset - n.onset) < 1e-6) { if (!last.midis.includes(n.midi)) last.midis.push(n.midi); }
+      else steps.push({ onset: n.onset, midis: [n.midi] });
+    }
+  }
+
+  // Move a note into the on-screen keyboard's range
+  function onKeyboard(m) {
+    while (m < LOW) m += 12;
+    while (m > HIGH) m -= 12;
+    return m;
+  }
+
+  function currentTargets() {
+    const step = waitActive() ? steps[stepIdx] : null;
+    // Show what's coming up to a beat ahead, and always while waiting
+    if (!step || (holdAt === null && step.onset - position() > 1)) return new Set();
+    return new Set(step.midis.filter(m => !hits.has(m)).map(onKeyboard));
+  }
+
+  function practiceInput(m) {
+    const step = steps[stepIdx];
+    if (!step) return;
+    const same = (a, b) => $("any-octave").checked ? a % 12 === b % 12 : a === b;
+    const near = holdAt !== null || step.onset - position() <= 1;
+    const want = near ? step.midis.find(n => !hits.has(n) && same(n, m)) : undefined;
+    if (want !== undefined) {
+      hits.add(want);
+      stats.correct++;
+      feedback(m, "good");
+      if (step.midis.every(n => hits.has(n))) completeStep();
+    } else if (near && step.midis.some(n => same(n, m))) {
+      feedback(m, "good"); // repeated a note you already got
+    } else if (holdAt !== null) {
+      stats.wrong++;
+      feedback(m, "bad");
+    }
+    updateStats();
+  }
+
+  function completeStep() {
+    stepIdx++;
+    hits = new Set();
+    if (holdAt !== null) {
+      // Restart the clock from where it was waiting
+      anchorPos = holdAt;
+      anchorTime = ctx.currentTime;
+      holdAt = null;
+    }
+    schedule();
+  }
+
+  function feedback(m, cls) {
+    const el = keyEls[onKeyboard(m)];
+    if (!el) return;
+    el.classList.remove("good", "bad");
+    void el.offsetWidth; // restart the flash if the same key is hit twice quickly
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), 300);
+  }
+
+  function resetStats() {
+    stats = { correct: 0, wrong: 0 };
+    updateStats();
+  }
+
+  function updateStats() {
+    const total = stats.correct + stats.wrong;
+    $("practice-stats").textContent = $("wait").checked && total
+      ? `${stats.correct} correct, ${stats.wrong} wrong (${Math.round(100 * stats.correct / total)}%)`
+      : "";
+  }
+
+  // Changing practice settings mid-song picks up from the current spot
+  ["wait", "practice-hand"].forEach(id => $(id).addEventListener("change", () => {
+    updateStats();
+    if (playing) { const p = position(); haltAudio(); startAt(p); }
+  }));
+
   // ---------- MIDI input ----------
   const held = new Set();
   function onMidiMessage(e) {
     const [status, note, vel] = e.data;
     const cmd = status & 0xf0;
     if (cmd === 0x90 && vel > 0) {
+      if (waitActive()) {
+        if ($("midi-sound").checked) playNotes([note], true);
+        practiceInput(note);
+        return;
+      }
       // A new chord starts when you press a key with nothing held down
       if (!held.size) selected.clear();
       held.add(note);
