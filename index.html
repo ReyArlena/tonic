@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Chord Finder</title>
+<title>Tonic</title>
 <style>
   :root {
     --bg: #f3f2ef;
@@ -449,7 +449,7 @@
 <body>
 <div class="app">
   <header class="topbar">
-    <div class="brand"><span class="ic" data-ic="piano-keys"></span><span>Chord Finder</span></div>
+    <div class="brand"><span class="ic" data-ic="piano-keys"></span><span>Tonic</span></div>
     <nav class="views-nav" id="views-nav">
       <button data-view="theory" class="active" data-tip="Chords, scales and keys: click keys to name chords, or browse below"><span class="ic" data-ic="books"></span><span class="label">Theory</span></button>
       <button data-view="sheet" data-tip="Open sheet music, see its chords, play it back and practise along"><span class="ic" data-ic="music-notes"></span><span class="label">Sheet music</span></button>
@@ -786,9 +786,17 @@
   const NUMERALS = ["I","II","III","IV","V","VI","VII"];
 
   // ---------- Remembered UI state (view, sidebar, open sections) ----------
-  const ui = (() => { try { return JSON.parse(localStorage.getItem("chord-finder-ui")) || {}; } catch (e) { return {}; } })();
+  const UI_KEY = "tonic-ui", DB_NAME = "tonic";
+  // Earlier versions were called Chord Finder: carry saved settings over once
+  try {
+    if (!localStorage.getItem(UI_KEY) && localStorage.getItem("chord-finder-ui")) {
+      localStorage.setItem(UI_KEY, localStorage.getItem("chord-finder-ui"));
+      localStorage.removeItem("chord-finder-ui");
+    }
+  } catch (e) {}
+  const ui = (() => { try { return JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch (e) { return {}; } })();
   ui.sec = ui.sec || {};
-  function saveUi() { try { localStorage.setItem("chord-finder-ui", JSON.stringify(ui)); } catch (e) {} }
+  function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (e) {} }
 
   // ---------- State ----------
   const selected = new Set();
@@ -1517,12 +1525,29 @@
 
   // ---------- My sheet music: saved copies in IndexedDB ----------
   let dbPromise = null;
-  function sheetDb() {
-    return dbPromise ||= new Promise((resolve, reject) => {
-      const r = indexedDB.open("chord-finder", 1);
+  function openDb(name) {
+    return new Promise((resolve, reject) => {
+      const r = indexedDB.open(name, 1);
       r.onupgradeneeded = () => r.result.createObjectStore("sheets", { keyPath: "id", autoIncrement: true });
       r.onsuccess = () => resolve(r.result);
       r.onerror = () => reject(r.error);
+    });
+  }
+  function sheetDb() {
+    return dbPromise ||= openDb(DB_NAME).then(async db => {
+      // Move sheets saved under the old "chord-finder" name into this database, once
+      try {
+        const names = (await indexedDB.databases?.()) || [];
+        if (names.some(d => d.name === "chord-finder")) {
+          const old = await openDb("chord-finder");
+          const recs = await idbReq(old.transaction("sheets", "readonly").objectStore("sheets").getAll());
+          const store = db.transaction("sheets", "readwrite").objectStore("sheets");
+          await Promise.all(recs.map(rec => idbReq(store.put(rec))));
+          old.close();
+          indexedDB.deleteDatabase("chord-finder");
+        }
+      } catch (e) {}
+      return db;
     });
   }
   const idbReq = r => new Promise((resolve, reject) => { r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
@@ -1642,10 +1667,10 @@
       setTimeout(() => { resetArmed = false; btn.classList.remove("confirm"); btn.textContent = "Reset app"; }, 4000);
       return;
     }
-    try { localStorage.removeItem("chord-finder-ui"); } catch (e) {}
+    try { localStorage.removeItem(UI_KEY); } catch (e) {}
     try {
       if (dbPromise) (await dbPromise).close();
-      await new Promise(r => { const d = indexedDB.deleteDatabase("chord-finder"); d.onsuccess = d.onerror = d.onblocked = r; });
+      await new Promise(r => { const d = indexedDB.deleteDatabase(DB_NAME); d.onsuccess = d.onerror = d.onblocked = r; });
     } catch (e) {}
     location.reload();
   });
