@@ -272,6 +272,46 @@
   }
   .degree:hover { border-color: var(--accent); }
   .degree .num { font-size: 0.78rem; color: var(--muted); }
+  .degree.active { border-color: var(--accent); background: var(--accent-soft); }
+
+  /* Root note buttons (one row of 12) */
+  .root-row { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; padding: 3px; border-radius: 11px; background: var(--bg); }
+  .root-row button {
+    height: 34px; border: none; border-radius: 8px; background: transparent; cursor: pointer;
+    font-weight: 600; font-size: 0.9rem; color: var(--muted);
+  }
+  .root-row button:hover { color: var(--text); background: color-mix(in srgb, var(--panel) 60%, transparent); }
+  .root-row button.active { background: var(--panel); color: var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+  .mode-row { margin-top: 10px; }
+  .mode-row .tabs { display: flex; }
+  .mode-row .tab { flex: 1; }
+
+  /* Chord / scale cards, grouped */
+  .group-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; margin: 16px 0 6px; }
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+  .card-grid.wide { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); }
+  .card {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 7px 10px 8px;
+    border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); cursor: pointer; text-align: left;
+    transition: border-color 0.12s, background-color 0.12s;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card.active { border-color: var(--accent); background: var(--accent-soft); }
+  .card .sym { font-weight: 700; font-size: 1.05rem; line-height: 1.25; }
+  .card .name { font-size: 0.76rem; color: var(--muted); }
+  .card .notes { font-size: 0.76rem; color: var(--text); opacity: 0.8; font-variant-numeric: tabular-nums; }
+  .card.green.active { border-color: var(--hl); background: color-mix(in srgb, var(--hl-soft) 55%, var(--panel)); }
+
+  /* Selected scale summary */
+  .scale-summary {
+    margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--border);
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center;
+  }
+  .scale-summary .title { font-weight: 700; font-size: 1.05rem; }
+  .scale-summary .notes { color: var(--text); }
+  .scale-summary .formula { color: var(--muted); font-size: 0.82rem; grid-column: 1; }
+  .scale-summary .icon-btn { grid-row: 1 / span 3; grid-column: 2; }
+  @media (max-width: 560px) { .root-row { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
   .degree .sym { font-weight: 600; }
 
   /* Chords by measure */
@@ -538,29 +578,34 @@
           </div>
         </div>
         <div class="pane-body">
+          <!-- The hidden selects hold each tab's state; root buttons and cards set them -->
           <div class="tabpane active" id="tab-chords">
-            <div class="row">
-              <select id="chord-root"></select>
-              <select id="chord-type"></select>
-            </div>
-            <div class="section-title">All chords for this root</div>
-            <div class="chips" id="chord-list"></div>
+            <select id="chord-root" hidden></select>
+            <select id="chord-type" hidden></select>
+            <div class="root-row" data-for="chord-root"></div>
+            <div id="chord-list"></div>
           </div>
           <div class="tabpane" id="tab-scales">
-            <div class="row">
-              <select id="scale-root"></select>
-              <select id="scale-type"></select>
-            </div>
+            <select id="scale-root" hidden></select>
+            <select id="scale-type" hidden></select>
+            <div class="root-row" data-for="scale-root"></div>
             <div id="scale-info"></div>
+            <div id="scale-list"></div>
           </div>
           <div class="tabpane" id="tab-keys">
-            <div class="row">
-              <select id="key-root"></select>
-              <select id="key-mode">
-                <option value="major">major</option>
-                <option value="minor">minor (natural)</option>
-                <option value="harmonic minor">harmonic minor</option>
-              </select>
+            <select id="key-root" hidden></select>
+            <select id="key-mode" hidden>
+              <option value="major">major</option>
+              <option value="minor">minor (natural)</option>
+              <option value="harmonic minor">harmonic minor</option>
+            </select>
+            <div class="root-row" data-for="key-root"></div>
+            <div class="mode-row">
+              <div class="tabs" id="key-mode-seg">
+                <button class="tab" data-mode="major">Major</button>
+                <button class="tab" data-mode="minor">Minor</button>
+                <button class="tab" data-mode="harmonic minor">Harmonic minor</button>
+              </div>
             </div>
             <div id="key-info"></div>
           </div>
@@ -734,6 +779,34 @@
   const SHARPS = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
   const FLATS  = ["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
   const ROOTS  = ["C","Db","D","Eb","E","F","F#","G","Ab","A","Bb","B"];
+  const ROOT_LABELS = ["C","C#/Db","D","D#/Eb","E","F","F#/Gb","G","G#/Ab","A","A#/Bb","B"];
+
+  // Spell a root by context: try its sharp and flat names and keep the one whose notes read
+  // most cleanly (fewest accidentals; Fb/Cb/E#/B# and doubles only when unavoidable).
+  // e.g. key C#: Db major (Db F Ab) but C# minor (C# E G#). Ties keep the usual name (F# major, Eb minor).
+  const spellScore = notes => notes.reduce((a, n) =>
+    a + (/(bb|##)$/.test(n) ? 4 : /^(Fb|Cb|E#|B#)$/.test(n) ? 3 : /[#b]$/.test(n) ? 1 : 0), 0);
+  function bestRoot(chroma, notesFor) {
+    return [...new Set([ROOTS[chroma], SHARPS[chroma], FLATS[chroma]])]
+      .reduce((best, r) => (spellScore(notesFor(r)) < spellScore(notesFor(best)) ? r : best));
+  }
+  const scaleRoot = (chroma, type) => bestRoot(chroma, r => Scale.get(r + " " + type).notes);
+  const chordRoot = (chroma, sym) => bestRoot(chroma, r => Chord.get(r + sym).notes);
+
+  // Re-spell a detected chord name the same way (keeps a slash bass as a chord tone spelling)
+  function respellChord(name) {
+    const c = Chord.get(name);
+    if (c.empty || !c.tonic) return name;
+    const sym = c.aliases[0] ?? "";
+    const root = chordRoot(Note.chroma(c.tonic), sym);
+    const [, bass] = name.split("/");
+    let out = root + sym;
+    if (bass) {
+      const tone = Chord.get(root + sym).notes.find(n => Note.chroma(n) === Note.chroma(bass));
+      out += "/" + (tone || bass);
+    }
+    return out;
+  }
   const BLACK = new Set([1, 3, 6, 8, 10]);
   // Piano sizes offered in settings: [low, high] MIDI notes, centred on middle C
   const PIANO_RANGES = {
@@ -1088,8 +1161,12 @@
   }
 
   function chordSymbol(rootC, type, bassC = null) {
-    let s = pc(rootC) + type.suf;
-    if (bassC !== null && bassC !== rootC) s += "/" + pc(bassC);
+    const root = chordRoot(rootC, type.suf);
+    let s = root + type.suf;
+    if (bassC !== null && bassC !== rootC) {
+      const tone = Chord.get(root + type.suf).notes.find(n => Note.chroma(n) === bassC);
+      s += "/" + (tone || pc(bassC));
+    }
     return s;
   }
 
@@ -1101,6 +1178,7 @@
   function render() {
     renderKeys();
     renderResult();
+    markActiveCards();
   }
 
   // With "Highlights in all octaves" off, a scale shows one octave: root to root, around middle C
@@ -1169,12 +1247,13 @@
     } else {
       const found = Chord.detect(pcs).sort((a, b) => rank(a) - rank(b));
       if (found.length) {
-        const c = Chord.get(found[0]);
-        mainChord = { name: found[0], chord: c };
-        html += `<div class="chord">${prettySymbol(found[0])}</div><div class="chord-name">${c.name}</div>`;
+        const named = respellChord(found[0]);
+        const c = Chord.get(named);
+        mainChord = { name: named, chord: c };
+        html += `<div class="chord">${prettySymbol(named)}</div><div class="chord-name">${c.name}</div>`;
         if (found.length > 1) {
           secs += section("alt", "Could also be", '<div class="chips">' +
-            found.slice(1).map(n => `<span class="chip">${prettySymbol(n)}</span>`).join("") + "</div>");
+            found.slice(1).map(n => `<span class="chip">${prettySymbol(respellChord(n))}</span>`).join("") + "</div>");
         }
       } else {
         html += `<div class="chord">?</div><div class="chord-name">No standard chord name for these notes</div>`;
@@ -1209,8 +1288,9 @@
       // Chord in keys (Roman numerals)
       const chordKey = [...new Set(chromas)].sort((a, b) => a - b).join(",");
       const inKeys = [];
-      for (const root of ROOTS) {
+      for (let rc = 0; rc < 12; rc++) {
         for (const mode of MATCH_KEYS) {
+          const root = scaleRoot(rc, mode);
           for (const d of diatonic(root, mode)) {
             if (d.rootC === rootC && d.chromaKey === chordKey) inKeys.push({ root, mode, numeral: d.numeral });
           }
@@ -1233,8 +1313,9 @@
 
     // Scales that contain these notes
     const keys = [], others = [];
-    for (const root of ROOTS) {
+    for (let rc = 0; rc < 12; rc++) {
       for (const type of MATCH_KEYS.concat(MATCH_OTHER)) {
+        const root = scaleRoot(rc, type);
         const s = scaleData(root, type);
         if (chromas.every(c => s.chromas.includes(c))) {
           (MATCH_KEYS.includes(type) ? keys : others).push({ root, type });
@@ -1254,7 +1335,7 @@
 
   function showScale(root, type, extra = {}) {
     const s = scaleData(root, type);
-    setOverlay({ label: `${root} ${type} (${s.notes.join(" ")})`, pcs: new Set(s.chromas), tonic: s.tonic, ...extra });
+    setOverlay({ id: Note.chroma(root) + "|" + type, label: `${root} ${type} (${s.notes.join(" ")})`, pcs: new Set(s.chromas), tonic: s.tonic, ...extra });
   }
 
   // Delegated clicks for any chip with data attributes
@@ -1274,7 +1355,7 @@
 
   // ---------- Browse: chords ----------
   function fillRoots(sel) {
-    sel.innerHTML = ROOTS.map(r => `<option value="${r}">${r}</option>`).join("");
+    sel.innerHTML = ROOTS.map((r, i) => `<option value="${i}">${r}</option>`).join("");
   }
   fillRoots($("chord-root"));
   fillRoots($("scale-root"));
@@ -1282,35 +1363,97 @@
   $("chord-type").innerHTML = CHORD_TYPES.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
   $("scale-type").innerHTML = SCALES.map(s => `<option value="${s}">${s}</option>`).join("");
 
+
+  const CHORD_GROUPS = [
+    ["Triads", ["M", "m", "dim", "aug"]],
+    ["Suspended & power", ["sus2", "sus4", "5"]],
+    ["Sixths", ["6", "m6"]],
+    ["Sevenths", ["7", "maj7", "m7", "mMaj7", "m7b5", "dim7", "maj7#5"]],
+    ["Extended", ["add9", "9", "maj9", "m9"]],
+  ];
+  const SCALE_GROUPS = [
+    ["Major & minor", ["major", "minor", "harmonic minor", "melodic minor"]],
+    ["Modes", ["dorian", "phrygian", "lydian", "mixolydian", "locrian"]],
+    ["Pentatonic & blues", ["major pentatonic", "minor pentatonic", "blues", "major blues"]],
+  ];
+
+  function renderRootRows() {
+    document.querySelectorAll(".root-row").forEach(row => {
+      const sel = $(row.dataset.for);
+      row.innerHTML = ROOT_LABELS.map((r, i) => `<button data-root="${i}" class="${String(i) === sel.value ? "active" : ""}">${r}</button>`).join("");
+    });
+  }
+  document.addEventListener("click", e => {
+    const b = e.target.closest(".root-row button");
+    if (!b) return;
+    const sel = $(b.closest(".root-row").dataset.for);
+    sel.value = b.dataset.root;
+    sel.dispatchEvent(new Event("change"));
+    renderRootRows();
+  });
+
   function renderChordList() {
-    const root = $("chord-root").value;
-    const rootC = Note.chroma(root);
-    $("chord-list").innerHTML = CHORD_TYPES.map(t =>
-      chip(`${root}${t.suf || ""}<small>${t.name}</small>`, `data-chord="${rootC}|${t.id}"`)).join("");
+    const rootC = +$("chord-root").value;
+    $("chord-list").innerHTML = CHORD_GROUPS.map(([title, ids]) =>
+      `<div class="group-title">${title}</div><div class="card-grid">` + ids.map(id => {
+        const t = TYPE[id];
+        const sym = id === "M" ? "" : id;
+        const root = chordRoot(rootC, sym);
+        const notes = Chord.get(root + sym).notes;
+        return `<button class="card" data-pick-chord="${id}" data-voicing="${voicing(rootC, t).join(",")}">
+          <span class="sym">${root}${t.suf}</span><span class="name">${t.name}</span><span class="notes">${notes.join(" ")}</span></button>`;
+      }).join("") + "</div>").join("");
+    markActiveCards();
   }
   function showBrowseChord() {
-    const rootC = Note.chroma($("chord-root").value);
-    setSelection(voicing(rootC, TYPE[$("chord-type").value]));
+    setSelection(voicing(+$("chord-root").value, TYPE[$("chord-type").value]));
   }
   $("chord-root").addEventListener("change", () => { renderChordList(); showBrowseChord(); });
   $("chord-type").addEventListener("change", showBrowseChord);
+  document.addEventListener("click", e => {
+    const c = e.target.closest("[data-pick-chord]");
+    if (!c) return;
+    $("chord-type").value = c.dataset.pickChord;
+    $("chord-type").dispatchEvent(new Event("change"));
+  });
+
+  // Cards light up for what's on the piano: the selected chord, or the highlighted scale / key
+  function markActiveCards() {
+    const sel = [...selected].sort((a, b) => a - b).join(",");
+    document.querySelectorAll("[data-voicing]").forEach(c => c.classList.toggle("active", c.dataset.voicing === sel));
+    document.querySelectorAll("[data-pick-scale]").forEach(c =>
+      c.classList.toggle("active", overlay?.id === $("scale-root").value + "|" + c.dataset.pickScale));
+    document.querySelectorAll("#key-info .degree").forEach(c => {
+      const [rootC, typeId] = c.dataset.chord.split("|");
+      c.classList.toggle("active", voicing(+rootC, TYPE[typeId]).join(",") === sel);
+    });
+  }
 
   // ---------- Browse: scales ----------
   function renderScaleInfo() {
-    const root = $("scale-root").value, type = $("scale-type").value;
+    const rc = +$("scale-root").value, type = $("scale-type").value;
+    const root = scaleRoot(rc, type);
     const s = scaleData(root, type);
-    $("scale-info").innerHTML =
-      `<div class="section-title">Notes</div><div>${s.notes.join(" · ")}</div>` +
-      `<div class="section-title">Formula (W = whole step, H = half step)</div><div class="formula">${formula(s.chromas)}</div>` +
-      `<div class="section-title">Play</div>` +
-      `<div class="chips">${chip("Play scale", 'id="play-scale"')}</div>`;
+    $("scale-info").innerHTML = `<div class="scale-summary">
+        <span class="title">${root} ${type}</span>
+        <span class="notes">${s.notes.join(" · ")}</span>
+        <span class="formula" data-tip="W = whole step (2 semitones), H = half step (1 semitone)">${formula(s.chromas)}</span>
+        <button class="icon-btn" id="play-scale" data-tip="Play this scale">${iconSvg("play")}</button>
+      </div>`;
+    $("scale-list").innerHTML = SCALE_GROUPS.map(([title, types]) =>
+      `<div class="group-title">${title}</div><div class="card-grid wide">` + types.map(t =>
+        `<button class="card green" data-pick-scale="${t}">
+          <span class="sym">${t[0].toUpperCase() + t.slice(1)}</span><span class="notes">${scaleData(scaleRoot(rc, t), t).notes.join(" ")}</span></button>`
+      ).join("") + "</div>").join("");
     showScale(root, type);
   }
   $("scale-root").addEventListener("change", renderScaleInfo);
   $("scale-type").addEventListener("change", renderScaleInfo);
   document.addEventListener("click", e => {
+    const c = e.target.closest("[data-pick-scale]");
+    if (c) { $("scale-type").value = c.dataset.pickScale; $("scale-type").dispatchEvent(new Event("change")); return; }
     if (e.target.closest("#play-scale")) {
-      const s = scaleData($("scale-root").value, $("scale-type").value);
+      const s = scaleData(scaleRoot(+$("scale-root").value, $("scale-type").value), $("scale-type").value);
       const start = 60 + s.tonic - (s.tonic > 6 ? 12 : 0);
       const midis = s.chromas.map(c => start + mod12(c - s.tonic)).concat(start + 12);
       if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1320,26 +1463,31 @@
 
   // ---------- Browse: keys ----------
   function renderKeyInfo() {
-    const root = $("key-root").value, mode = $("key-mode").value;
+    const mode = $("key-mode").value, root = scaleRoot(+$("key-root").value, mode);
     const s = scaleData(root, mode);
     const chords = diatonic(root, mode);
     const row = size => '<div class="degree-grid">' + chords.filter(c => c.size === size).map(c =>
       `<button class="degree" data-chord="${c.rootC}|${c.type.id}"><span class="num">${c.numeral}</span><span class="sym">${c.symbol}</span></button>`
     ).join("") + "</div>";
+    document.querySelectorAll("#key-mode-seg .tab").forEach(t => t.classList.toggle("active", t.dataset.mode === mode));
     $("key-info").innerHTML =
-      `<div class="section-title">Notes</div><div>${s.notes.join(" · ")}</div>` +
+      `<div class="section-title">${root} ${mode}</div><div>${s.notes.join(" · ")}</div>` +
       `<div class="section-title">Formula</div><div class="formula">${formula(s.chromas)}</div>` +
       `<div class="section-title">Chords (triads)</div>${row(3)}` +
       `<div class="section-title">Seventh chords</div>${row(4)}`;
     showScale(root, mode);
   }
   $("key-root").addEventListener("change", renderKeyInfo);
+  document.querySelectorAll("#key-mode-seg .tab").forEach(t => t.addEventListener("click", () => {
+    $("key-mode").value = t.dataset.mode;
+    $("key-mode").dispatchEvent(new Event("change"));
+  }));
   $("key-mode").addEventListener("change", renderKeyInfo);
 
   // ---------- Tabs ----------
   const tabInit = { chords: () => {}, scales: renderScaleInfo, keys: renderKeyInfo, sheet: () => {} };
-  document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x === t));
+  document.querySelectorAll(".tab[data-tab]").forEach(t => t.addEventListener("click", () => {
+    document.querySelectorAll(".tab[data-tab]").forEach(x => x.classList.toggle("active", x === t));
     document.querySelectorAll(".tabpane").forEach(p => p.classList.toggle("active", p.id === "tab-" + t.dataset.tab));
     tabInit[t.dataset.tab]();
   }));
@@ -1467,7 +1615,7 @@
     const split = $("xml-split").value;
     const key = detectKey(xmlMeasures.flatMap(m => m.notes));
     songKey = key;
-    $("sheet-key").textContent = key ? `Key: ${pc(key.root)} ${key.mode} (best guess)` : "";
+    $("sheet-key").textContent = key ? `Key: ${scaleRoot(key.root, key.mode)} ${key.mode} (best guess)` : "";
     let html = `<div class="measures">`;
     xmlMeasures.forEach((m, idx) => {
       const parts = split === "beat" ? Math.max(1, Math.round(m.length / m.beatLen)) : Math.min(+split, Math.max(1, Math.round(m.length / m.beatLen)));
@@ -1761,7 +1909,7 @@
   // "Show key": highlight the song's detected key on the piano
   let songKey = null;
   function applySongKey() {
-    if ($("show-key").checked && songKey) showScale(ROOTS[songKey.root], songKey.mode, { songKey: true });
+    if ($("show-key").checked && songKey) showScale(scaleRoot(songKey.root, songKey.mode), songKey.mode, { songKey: true });
     else if (overlay?.songKey) setOverlay(null);
   }
   $("show-key").addEventListener("change", applySongKey);
@@ -2595,6 +2743,7 @@
   });
   spellingEl.addEventListener("change", () => { render(); renderChordList(); renderSheet(); });
 
+  renderRootRows();
   renderChordList();
   render();
   loadPiano();
