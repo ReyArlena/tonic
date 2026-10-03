@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chord Finder</title>
+<style>
+  :root {
+    --bg: #f6f5f2;
+    --panel: #ffffff;
+    --text: #1d1d1f;
+    --muted: #6b6b70;
+    --border: #d8d6d0;
+    --accent: #2f6fde;
+    --accent-soft: #dbe7fb;
+    --hl: #2e9e6a;
+    --hl-soft: #c9ecd9;
+    --hl-strong: #1f7a50;
+    --white-key: #ffffff;
+    --black-key: #1f1f22;
+    --key-on: #2f6fde;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151517;
+      --panel: #1f1f23;
+      --text: #ececee;
+      --muted: #9a9aa2;
+      --border: #34343a;
+      --accent: #6a9cff;
+      --accent-soft: #24324d;
+      --hl: #3fbf84;
+      --hl-soft: #9fdcbd;
+      --hl-strong: #2a9a66;
+      --white-key: #e9e9ec;
+      --black-key: #0b0b0d;
+      --key-on: #4f86f7;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+  button, select, input[type=file] {
+    font: inherit; font-size: 0.95rem;
+    padding: 6px 14px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    cursor: pointer;
+  }
+  button:hover, select:hover { border-color: var(--accent); }
+  label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.95rem; }
+  .status { color: var(--muted); font-size: 0.9rem; }
+
+  .overlay-bar {
+    display: none; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 10px; padding: 6px 12px; border-radius: 8px;
+    background: var(--hl-soft); color: #10301f; font-size: 0.95rem;
+  }
+  .overlay-bar.show { display: flex; }
+  .overlay-bar button { padding: 2px 10px; font-size: 0.85rem; }
+
+  .piano-wrap { overflow-x: auto; padding-bottom: 8px; }
+  .piano { position: relative; height: 190px; user-select: none; touch-action: manipulation; }
+  .key { position: absolute; top: 0; border: 1px solid var(--border); border-radius: 0 0 6px 6px; cursor: pointer; }
+  .key.white { background: var(--white-key); height: 190px; z-index: 1; }
+  .key.black { background: var(--black-key); height: 118px; z-index: 2; border-color: var(--black-key); }
+  .key.white.hl { background: var(--hl-soft); }
+  .key.black.hl { background: var(--hl); border-color: var(--hl); }
+  .key.hl.tonic { background: var(--hl-strong); border-color: var(--hl-strong); }
+  /* Selected beats highlight; a green strip marks "also in the highlighted scale" */
+  .key.white.on, .key.black.on { background: var(--key-on); border-color: var(--key-on); }
+  .key.on.hl { box-shadow: inset 0 -10px 0 var(--hl); }
+  .key.pressed { filter: brightness(0.8); }
+  .key.on.hl.tonic { box-shadow: inset 0 -10px 0 var(--hl-strong); }
+  .key .lbl {
+    position: absolute; bottom: 8px; left: 0; right: 0; text-align: center;
+    font-size: 0.72rem; color: #888; pointer-events: none;
+  }
+  .key.black .lbl { bottom: 6px; color: #bbb; }
+  .key.hl .lbl { color: #10301f; font-weight: 600; }
+  .key.black.hl .lbl, .key.hl.tonic .lbl, .key.on .lbl { color: #fff; font-weight: 600; }
+  .key.on.hl .lbl { bottom: 14px; }
+
+  .panel {
+    margin-top: 16px; padding: 18px 20px; border-radius: 12px;
+    background: var(--panel); border: 1px solid var(--border);
+  }
+  .notes { color: var(--muted); margin-bottom: 4px; }
+  .chord { font-size: 2.2rem; font-weight: 700; line-height: 1.2; }
+  .chord-name { color: var(--muted); }
+  .section-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 16px 0 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    padding: 3px 10px; border-radius: 999px; background: var(--accent-soft);
+    font-size: 0.9rem; border: 1px solid transparent; color: var(--text);
+  }
+  button.chip:hover { border-color: var(--accent); }
+  .chip.green { background: var(--hl-soft); color: #10301f; }
+  .chip.active { border-color: var(--accent); font-weight: 600; }
+  .chip small { color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .chip.green small { color: #3c5a4a; }
+  .empty { color: var(--muted); }
+  .intervals { display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; font-size: 0.95rem; }
+  .intervals span:nth-child(odd) { font-weight: 600; }
+  .formula { font-family: ui-monospace, monospace; font-size: 0.95rem; }
+
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin: -4px 0 14px; }
+  .tab {
+    border: none; border-bottom: 2px solid transparent; border-radius: 0;
+    background: none; padding: 6px 12px; color: var(--muted);
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  .tabpane { display: none; }
+  .tabpane.active { display: block; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .degree-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+  .degree {
+    display: flex; flex-direction: column; align-items: center; padding: 6px 4px;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--panel);
+  }
+  .degree .num { font-size: 0.8rem; color: var(--muted); }
+  .degree .sym { font-weight: 600; }
+  .measures { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
+  .measure { border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+  .measure .mnum { font-size: 0.75rem; color: var(--muted); }
+  .measure .chips { gap: 4px; }
+  @media (max-width: 600px) {
+    .degree-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Chord Finder</h1>
+  <p class="sub">Click keys (or play a MIDI keyboard) to pick notes. The lowest note counts as the bass.
+    Blue = selected notes, green = highlighted scale or key.</p>
+
+  <div class="controls">
+    <button id="play">Play</button>
+    <button id="clear">Clear</button>
+    <label>Spelling
+      <select id="spelling">
+        <option value="sharp">Sharps (C#)</option>
+        <option value="flat">Flats (Db)</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="select-mode" checked> Select keys</label>
+    <label><input type="checkbox" id="sound" checked> Sound</label>
+    <button id="midi">Connect MIDI</button>
+    <label><input type="checkbox" id="midi-sound"> Synth for MIDI</label>
+    <span class="status" id="midi-status"></span>
+  </div>
+
+  <div class="overlay-bar" id="overlay-bar">
+    <span id="overlay-label"></span>
+    <button id="overlay-clear">Remove highlight</button>
+  </div>
+
+  <div class="piano-wrap" id="piano-wrap"><div class="piano" id="piano"></div></div>
+
+  <div class="panel" id="result"></div>
+
+  <div class="panel">
+    <div class="tabs">
+      <button class="tab active" data-tab="chords">Chords</button>
+      <button class="tab" data-tab="scales">Scales</button>
+      <button class="tab" data-tab="keys">Keys</button>
+      <button class="tab" data-tab="sheet">Sheet music</button>
+    </div>
+
+    <div class="tabpane active" id="tab-chords">
+      <div class="row">
+        <select id="chord-root"></select>
+        <select id="chord-type"></select>
+      </div>
+      <div class="section-title">All chords for this root</div>
+      <div class="chips" id="chord-list"></div>
+    </div>
+
+    <div class="tabpane" id="tab-scales">
+      <div class="row">
+        <select id="scale-root"></select>
+        <select id="scale-type"></select>
+      </div>
+      <div id="scale-info"></div>
+    </div>
+
+    <div class="tabpane" id="tab-keys">
+      <div class="row">
+        <select id="key-root"></select>
+        <select id="key-mode">
+          <option value="major">major</option>
+          <option value="minor">minor (natural)</option>
+          <option value="harmonic minor">harmonic minor</option>
+        </select>
+      </div>
+      <div id="key-info"></div>
+    </div>
+
+    <div class="tabpane" id="tab-sheet">
+      <div class="row">
+        <input type="file" id="xml-file" accept=".musicxml,.xml">
+        <label>Group by
+          <select id="xml-split">
+            <option value="1" selected>measure</option>
+            <option value="2">half measure</option>
+            <option value="beat">beat</option>
+          </select>
+        </label>
+      </div>
+      <p class="status">Uncompressed MusicXML only (.musicxml / .xml, not .mxl). Click a chord to see it on the piano;
+        the actual notes in that part of the music turn green.</p>
+      <div id="xml-info"></div>
+    </div>
+  </div>
+</main>
+
+<script src="tonal.min.js"></script>
+<script>
+  const { Chord, Scale, Note } = Tonal;
+
+  // ---------- Data ----------
+  const SHARPS = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const FLATS  = ["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
+  const ROOTS  = ["C","Db","D","Eb","E","F","F#","G","Ab","A","Bb","B"];
+  const BLACK = new Set([1, 3, 6, 8, 10]);
+  const LOW = 36, HIGH = 84; // C2 to C6
+
+  const CHORD_TYPES = [
+    { id: "M",      suf: "",       name: "major",               iv: [0,4,7] },
+    { id: "m",      suf: "m",      name: "minor",               iv: [0,3,7] },
+    { id: "dim",    suf: "dim",    name: "diminished",          iv: [0,3,6] },
+    { id: "aug",    suf: "aug",    name: "augmented",           iv: [0,4,8] },
+    { id: "sus2",   suf: "sus2",   name: "suspended 2nd",       iv: [0,2,7] },
+    { id: "sus4",   suf: "sus4",   name: "suspended 4th",       iv: [0,5,7] },
+    { id: "5",      suf: "5",      name: "power chord",         iv: [0,7] },
+    { id: "6",      suf: "6",      name: "major 6th",           iv: [0,4,7,9] },
+    { id: "m6",     suf: "m6",     name: "minor 6th",           iv: [0,3,7,9] },
+    { id: "7",      suf: "7",      name: "dominant 7th",        iv: [0,4,7,10] },
+    { id: "maj7",   suf: "maj7",   name: "major 7th",           iv: [0,4,7,11] },
+    { id: "m7",     suf: "m7",     name: "minor 7th",           iv: [0,3,7,10] },
+    { id: "mMaj7",  suf: "mMaj7",  name: "minor-major 7th",     iv: [0,3,7,11] },
+    { id: "m7b5",   suf: "m7b5",   name: "half-diminished",     iv: [0,3,6,10] },
+    { id: "dim7",   suf: "dim7",   name: "diminished 7th",      iv: [0,3,6,9] },
+    { id: "maj7#5", suf: "maj7#5", name: "augmented major 7th", iv: [0,4,8,11] },
+    { id: "add9",   suf: "add9",   name: "add 9",               iv: [0,4,7,14] },
+    { id: "9",      suf: "9",      name: "dominant 9th",        iv: [0,4,7,10,14] },
+    { id: "maj9",   suf: "maj9",   name: "major 9th",           iv: [0,4,7,11,14] },
+    { id: "m9",     suf: "m9",     name: "minor 9th",           iv: [0,3,7,10,14] },
+  ];
+  const TYPE = Object.fromEntries(CHORD_TYPES.map(t => [t.id, t]));
+
+  const SCALES = ["major", "minor", "harmonic minor", "melodic minor", "dorian", "phrygian",
+    "lydian", "mixolydian", "locrian", "major pentatonic", "minor pentatonic", "blues", "major blues"];
+  // Scales offered in "scales that contain these notes" (modes left out: they repeat the keys)
+  const MATCH_KEYS = ["major", "minor", "harmonic minor"];
+  const MATCH_OTHER = ["melodic minor", "major pentatonic", "minor pentatonic", "blues"];
+
+  // Chord types to prefer when Tonal returns several names for the same notes
+  const COMMON = ["major","minor","dominant seventh","major seventh","minor seventh",
+    "diminished","augmented","suspended fourth","suspended second","sixth","minor sixth",
+    "diminished seventh","half-diminished","fifth","dominant ninth","major ninth",
+    "minor ninth","seventh flat five","minor/major seventh","added ninth"];
+
+  const INTERVALS = ["Unison","Minor 2nd","Major 2nd","Minor 3rd","Major 3rd","Perfect 4th",
+    "Tritone","Perfect 5th","Minor 6th","Major 6th","Minor 7th","Major 7th"];
+  const COMPOUND = { 12: "Octave", 13: "Minor 9th", 14: "Major 9th", 15: "Minor 10th", 16: "Major 10th",
+    17: "Perfect 11th", 18: "Augmented 11th", 19: "Perfect 12th", 20: "Minor 13th", 21: "Major 13th", 24: "2 octaves" };
+  const STEP_NAMES = { 1: "H", 2: "W", 3: "W+H", 4: "2W" };
+  const NUMERALS = ["I","II","III","IV","V","VI","VII"];
+
+  // ---------- State ----------
+  const selected = new Set();
+  let overlay = null; // { label, pcs: Set<chroma> | null, midis: Set<midi> | null, tonic: chroma | null }
+
+  const $ = id => document.getElementById(id);
+  const pianoEl = $("piano"), resultEl = $("result"), spellingEl = $("spelling"), soundEl = $("sound");
+
+  const names = () => spellingEl.value === "flat" ? FLATS : SHARPS;
+  const pc = midi => names()[((midi % 12) + 12) % 12];
+  const octaveOf = midi => Math.floor(midi / 12) - 1;
+  const mod12 = x => ((x % 12) + 12) % 12;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // ---------- Keyboard ----------
+  const WHITE_W = 36, BLACK_W = 24;
+  const keyEls = {};
+  let whiteIndex = 0;
+  for (let m = LOW; m <= HIGH; m++) {
+    const el = document.createElement("div");
+    const isBlack = BLACK.has(m % 12);
+    el.className = "key " + (isBlack ? "black" : "white");
+    el.style.left = (isBlack ? whiteIndex * WHITE_W - BLACK_W / 2 : whiteIndex * WHITE_W) + "px";
+    el.style.width = (isBlack ? BLACK_W : WHITE_W) + "px";
+    if (!isBlack) whiteIndex++;
+    el.innerHTML = '<span class="lbl"></span>';
+    el.addEventListener("click", () => toggle(m));
+    pianoEl.appendChild(el);
+    keyEls[m] = el;
+  }
+  pianoEl.style.width = (whiteIndex * WHITE_W) + "px";
+  // Start scrolled so middle C is in view on narrow screens
+  requestAnimationFrame(() => {
+    const wrap = $("piano-wrap");
+    wrap.scrollLeft = (parseFloat(keyEls[60].style.left) - wrap.clientWidth / 2 + WHITE_W * 3);
+  });
+
+  function toggle(m) {
+    // With "Select keys" off, clicking just plays the note (a brief press shows which key)
+    if (!$("select-mode").checked) {
+      playNotes([m], true);
+      keyEls[m].classList.add("pressed");
+      setTimeout(() => keyEls[m].classList.remove("pressed"), 180);
+      return;
+    }
+    if (selected.has(m)) selected.delete(m);
+    else { selected.add(m); playNotes([m]); }
+    render();
+  }
+
+  function setSelection(midis, play = true) {
+    selected.clear();
+    midis.forEach(m => selected.add(m));
+    if (play) playNotes([...selected].sort((a, b) => a - b));
+    render();
+  }
+
+  function setOverlay(o) {
+    overlay = o;
+    render();
+  }
+
+  // ---------- Sound ----------
+  let ctx;
+  function playNotes(midis, force = false) {
+    if ((!soundEl.checked && !force) || !midis.length) return;
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    midis.forEach((m, i) => {
+      const t = now + i * 0.04;
+      const freq = 440 * Math.pow(2, (m - 69) / 12);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.25 / Math.max(1, midis.length * 0.6), t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 1.6);
+      gain.connect(ctx.destination);
+      ["triangle", "sine"].forEach((type, j) => {
+        const osc = ctx.createOscillator();
+        osc.type = type;
+        osc.frequency.value = freq * (j + 1);
+        const g = ctx.createGain();
+        g.gain.value = j ? 0.3 : 1;
+        osc.connect(g).connect(gain);
+        osc.start(t);
+        osc.stop(t + 1.7);
+      });
+    });
+  }
+
+  // ---------- Theory helpers ----------
+  function prettySymbol(sym) {
+    // Tonal writes major triads as "CM"; show them as "C"
+    return sym.replace(/^([A-G][#b]*)M(\/|$)/, "$1$2");
+  }
+
+  function rank(name) {
+    const i = COMMON.indexOf(Chord.get(name).type);
+    return (i === -1 ? 100 : i) + (name.includes("/") ? 0.5 : 0);
+  }
+
+  function intervalName(semis) {
+    if (COMPOUND[semis]) return COMPOUND[semis];
+    if (semis < 12) return INTERVALS[semis];
+    const oct = Math.floor(semis / 12);
+    return INTERVALS[semis % 12] + ` (+${oct} oct)`;
+  }
+
+  function formula(chromas) {
+    const steps = [];
+    for (let i = 0; i < chromas.length; i++) {
+      const next = i + 1 < chromas.length ? chromas[i + 1] : chromas[0];
+      const d = mod12(next - chromas[i]) || 12;
+      steps.push(STEP_NAMES[d] || d + " semitones");
+    }
+    return steps.join(" - ");
+  }
+
+  function scaleData(root, type) {
+    const s = Scale.get(root + " " + type);
+    const chromas = s.notes.map(n => Note.chroma(n));
+    return { notes: s.notes, chromas, tonic: Note.chroma(root) };
+  }
+
+  // Find a chord type from a chroma set relative to a root
+  function typeFromIntervals(ivs) {
+    const key = [...new Set(ivs.map(mod12))].sort((a, b) => a - b).join(",");
+    return CHORD_TYPES.find(t => [...new Set(t.iv.map(mod12))].sort((a, b) => a - b).join(",") === key);
+  }
+
+  function numeral(degree, type) {
+    const minorish = type.iv[1] === 3;
+    let n = minorish ? NUMERALS[degree].toLowerCase() : NUMERALS[degree];
+    const suffix = { dim: "°", aug: "+", "7": "7", maj7: "maj7", m7: "7", mMaj7: "(maj7)",
+      m7b5: "ø7", dim7: "°7", "maj7#5": "+maj7" }[type.id] || "";
+    return n + suffix;
+  }
+
+  // The 7 triads and 7 seventh chords of a key
+  function diatonic(root, mode) {
+    const s = scaleData(root, mode);
+    const out = [];
+    for (let d = 0; d < 7; d++) {
+      const c = i => s.chromas[(d + i) % 7];
+      const rootC = c(0);
+      for (const size of [3, 4]) {
+        const tones = [c(0), c(2), c(4), c(6)].slice(0, size);
+        const type = typeFromIntervals(tones.map(t => t - rootC));
+        if (!type) continue;
+        out.push({ degree: d, size, rootName: s.notes[d], rootC, type,
+          symbol: s.notes[d] + type.suf, numeral: numeral(d, type),
+          chromaKey: [...new Set(tones)].sort((a, b) => a - b).join(",") });
+      }
+    }
+    return out;
+  }
+
+  // Root-position voicing starting at a given octave (C3 = 48 by default)
+  function voicing(rootC, type, inversion = 0, base = 48) {
+    let tones = type.iv.map(i => rootC + i);
+    for (let k = 0; k < inversion; k++) tones.push(tones.shift() + 12);
+    // Shift everything so the lowest note sits in the base octave
+    const lowest = tones[0];
+    const shift = base + mod12(lowest) - lowest;
+    return tones.map(t => t + shift);
+  }
+
+  function chordSymbol(rootC, type, bassC = null) {
+    let s = pc(rootC) + type.suf;
+    if (bassC !== null && bassC !== rootC) s += "/" + pc(bassC);
+    return s;
+  }
+
+  // ---------- Results ----------
+  function chip(label, attrs = "", cls = "") {
+    return `<button class="chip ${cls}" ${attrs}>${label}</button>`;
+  }
+
+  function render() {
+    // Piano
+    for (const [mStr, el] of Object.entries(keyEls)) {
+      const m = +mStr;
+      const on = selected.has(m);
+      let hl = false, tonic = false;
+      if (overlay) {
+        if (overlay.midis) hl = overlay.midis.has(m);
+        else if (overlay.pcs) {
+          hl = overlay.pcs.has(m % 12);
+          tonic = hl && overlay.tonic === m % 12;
+        }
+      }
+      el.classList.toggle("on", on);
+      el.classList.toggle("hl", hl);
+      el.classList.toggle("tonic", tonic);
+      let label = "";
+      if (on || hl) label = pc(m);
+      else if (m % 12 === 0) label = "C" + octaveOf(m);
+      el.querySelector(".lbl").textContent = label;
+    }
+    $("overlay-bar").classList.toggle("show", !!overlay);
+    $("overlay-label").textContent = overlay ? "Highlighted: " + overlay.label : "";
+
+    renderResult();
+  }
+
+  let lastInversions = null;
+
+  function renderResult() {
+    const midis = [...selected].sort((a, b) => a - b);
+    if (!midis.length) {
+      resultEl.innerHTML = '<div class="empty">No notes selected. Click keys, play a MIDI keyboard, or pick something below.</div>';
+      return;
+    }
+
+    const pcs = [];
+    for (const m of midis) if (!pcs.includes(pc(m))) pcs.push(pc(m));
+    const chromas = [...new Set(midis.map(m => m % 12))];
+    const bass = midis[0];
+
+    let html = `<div class="notes">${midis.map(m => pc(m) + octaveOf(m)).join(" · ")}</div>`;
+    let mainChord = null;
+
+    if (pcs.length === 1) {
+      html += `<div class="chord">${pcs[0]}</div><div class="chord-name">${midis.length > 1 ? "Octaves" : "Single note"}</div>`;
+    } else if (pcs.length === 2 && midis.length === 2) {
+      html += `<div class="chord">${pcs[0]} - ${pcs[1]}</div><div class="chord-name">Interval: ${intervalName(midis[1] - midis[0])}</div>`;
+    } else {
+      const found = Chord.detect(pcs).sort((a, b) => rank(a) - rank(b));
+      if (found.length) {
+        const c = Chord.get(found[0]);
+        mainChord = { name: found[0], chord: c };
+        html += `<div class="chord">${prettySymbol(found[0])}</div><div class="chord-name">${c.name}</div>`;
+        if (found.length > 1) {
+          html += '<div class="section-title">Could also be</div><div class="chips">' +
+            found.slice(1).map(n => `<span class="chip">${prettySymbol(n)}</span>`).join("") + "</div>";
+        }
+      } else {
+        html += `<div class="chord">?</div><div class="chord-name">No standard chord name for these notes</div>`;
+      }
+    }
+
+    // Intervals from the bass
+    if (midis.length > 1) {
+      html += '<div class="section-title">Intervals from the bass (' + pc(bass) + octaveOf(bass) + ')</div><div class="intervals">';
+      for (const m of midis.slice(1)) {
+        html += `<span>${pc(m)}${octaveOf(m)}</span><span>${intervalName(m - bass)}</span>`;
+      }
+      html += "</div>";
+    }
+
+    // Inversions
+    lastInversions = null;
+    if (mainChord) {
+      const rootC = Note.chroma(mainChord.chord.tonic);
+      const type = typeFromIntervals(chromas.map(c => c - rootC));
+      if (type && type.iv.length >= 3 && type.iv.every(i => i < 12)) {
+        const base = octaveOf(bass) * 12 + 12;
+        lastInversions = type.iv.map((_, k) => voicing(rootC, type, k, base));
+        const labels = ["Root position", "1st inversion", "2nd inversion", "3rd inversion"];
+        const current = midis.join(",");
+        html += '<div class="section-title">Inversions</div><div class="chips">' +
+          lastInversions.map((v, k) => chip(
+            `${chordSymbol(rootC, type, k ? mod12(v[0]) : null)}<small>${labels[k]}</small>`,
+            `data-inv="${k}"`, v.join(",") === current ? "active" : "")).join("") +
+          "</div>";
+      }
+
+      // Chord in keys (Roman numerals)
+      const chordKey = [...new Set(chromas)].sort((a, b) => a - b).join(",");
+      const inKeys = [];
+      for (const root of ROOTS) {
+        for (const mode of MATCH_KEYS) {
+          for (const d of diatonic(root, mode)) {
+            if (d.rootC === rootC && d.chromaKey === chordKey) inKeys.push({ root, mode, numeral: d.numeral });
+          }
+        }
+      }
+      // Skip harmonic minor entries that repeat the natural minor ones
+      const seen = new Set();
+      const uniq = inKeys.filter(k => {
+        const id = k.root + (k.mode === "major" ? "M" : "m") + k.numeral;
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+      if (uniq.length) {
+        html += '<div class="section-title">This chord in keys</div><div class="chips">' +
+          uniq.map(k => chip(`${k.numeral}<small>in ${k.root} ${k.mode}</small>`,
+            `data-scale="${k.root}|${k.mode}"`, "green")).join("") + "</div>";
+      }
+    }
+
+    // Scales that contain these notes
+    const keys = [], others = [];
+    for (const root of ROOTS) {
+      for (const type of MATCH_KEYS.concat(MATCH_OTHER)) {
+        const s = scaleData(root, type);
+        if (chromas.every(c => s.chromas.includes(c))) {
+          (MATCH_KEYS.includes(type) ? keys : others).push({ root, type });
+        }
+      }
+    }
+    html += '<div class="section-title">Keys that contain these notes</div>';
+    html += keys.length
+      ? '<div class="chips">' + keys.map(k => chip(`${k.root} ${k.type}`, `data-scale="${k.root}|${k.type}"`, "green")).join("") + "</div>"
+      : '<div class="empty">None of the major or minor keys</div>';
+    if (others.length) {
+      html += '<div class="section-title">Other scales</div><div class="chips">' +
+        others.map(k => chip(`${k.root} ${k.type}`, `data-scale="${k.root}|${k.type}"`, "green")).join("") + "</div>";
+    }
+
+    resultEl.innerHTML = html;
+  }
+
+  function showScale(root, type) {
+    const s = scaleData(root, type);
+    setOverlay({ label: `${root} ${type} (${s.notes.join(" ")})`, pcs: new Set(s.chromas), tonic: s.tonic });
+  }
+
+  // Delegated clicks for any chip with data attributes
+  document.addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.scale) {
+      const [root, type] = b.dataset.scale.split("|");
+      showScale(root, type);
+    } else if (b.dataset.inv !== undefined && lastInversions) {
+      setSelection(lastInversions[+b.dataset.inv]);
+    } else if (b.dataset.chord) {
+      const [rootC, typeId] = b.dataset.chord.split("|");
+      setSelection(voicing(+rootC, TYPE[typeId]));
+    }
+  });
+
+  // ---------- Browse: chords ----------
+  function fillRoots(sel) {
+    sel.innerHTML = ROOTS.map(r => `<option value="${r}">${r}</option>`).join("");
+  }
+  fillRoots($("chord-root"));
+  fillRoots($("scale-root"));
+  fillRoots($("key-root"));
+  $("chord-type").innerHTML = CHORD_TYPES.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+  $("scale-type").innerHTML = SCALES.map(s => `<option value="${s}">${s}</option>`).join("");
+
+  function renderChordList() {
+    const root = $("chord-root").value;
+    const rootC = Note.chroma(root);
+    $("chord-list").innerHTML = CHORD_TYPES.map(t =>
+      chip(`${root}${t.suf || ""}<small>${t.name}</small>`, `data-chord="${rootC}|${t.id}"`)).join("");
+  }
+  function showBrowseChord() {
+    const rootC = Note.chroma($("chord-root").value);
+    setSelection(voicing(rootC, TYPE[$("chord-type").value]));
+  }
+  $("chord-root").addEventListener("change", () => { renderChordList(); showBrowseChord(); });
+  $("chord-type").addEventListener("change", showBrowseChord);
+
+  // ---------- Browse: scales ----------
+  function renderScaleInfo() {
+    const root = $("scale-root").value, type = $("scale-type").value;
+    const s = scaleData(root, type);
+    $("scale-info").innerHTML =
+      `<div class="section-title">Notes</div><div>${s.notes.join(" · ")}</div>` +
+      `<div class="section-title">Formula (W = whole step, H = half step)</div><div class="formula">${formula(s.chromas)}</div>` +
+      `<div class="section-title">Play</div>` +
+      `<div class="chips">${chip("Play scale", 'id="play-scale"')}</div>`;
+    showScale(root, type);
+  }
+  $("scale-root").addEventListener("change", renderScaleInfo);
+  $("scale-type").addEventListener("change", renderScaleInfo);
+  document.addEventListener("click", e => {
+    if (e.target.closest("#play-scale")) {
+      const s = scaleData($("scale-root").value, $("scale-type").value);
+      const start = 60 + s.tonic - (s.tonic > 6 ? 12 : 0);
+      const midis = s.chromas.map(c => start + mod12(c - s.tonic)).concat(start + 12);
+      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      midis.forEach((m, i) => setTimeout(() => playNotes([m], true), i * 280));
+    }
+  });
+
+  // ---------- Browse: keys ----------
+  function renderKeyInfo() {
+    const root = $("key-root").value, mode = $("key-mode").value;
+    const s = scaleData(root, mode);
+    const chords = diatonic(root, mode);
+    const row = size => '<div class="degree-grid">' + chords.filter(c => c.size === size).map(c =>
+      `<button class="degree" data-chord="${c.rootC}|${c.type.id}"><span class="num">${c.numeral}</span><span class="sym">${c.symbol}</span></button>`
+    ).join("") + "</div>";
+    $("key-info").innerHTML =
+      `<div class="section-title">Notes</div><div>${s.notes.join(" · ")}</div>` +
+      `<div class="section-title">Formula</div><div class="formula">${formula(s.chromas)}</div>` +
+      `<div class="section-title">Chords (triads)</div>${row(3)}` +
+      `<div class="section-title">Seventh chords</div>${row(4)}`;
+    showScale(root, mode);
+  }
+  $("key-root").addEventListener("change", renderKeyInfo);
+  $("key-mode").addEventListener("change", renderKeyInfo);
+
+  // ---------- Tabs ----------
+  const tabInit = { chords: () => {}, scales: renderScaleInfo, keys: renderKeyInfo, sheet: () => {} };
+  document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x === t));
+    document.querySelectorAll(".tabpane").forEach(p => p.classList.toggle("active", p.id === "tab-" + t.dataset.tab));
+    tabInit[t.dataset.tab]();
+  }));
+
+  // ---------- Sheet music (MusicXML) ----------
+  const STEP_SEMIS = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  let xmlMeasures = [];
+
+  function parseMusicXML(text) {
+    const doc = new DOMParser().parseFromString(text, "application/xml");
+    if (doc.querySelector("parsererror")) throw new Error("Could not read this file as XML");
+    const title = doc.querySelector("work-title, movement-title")?.textContent || "Untitled";
+    const measures = []; // index -> { number, length, notes: [{midi, onset, dur}] }
+
+    for (const part of doc.querySelectorAll("part")) {
+      let divisions = 1, beats = 4, beatType = 4;
+      [...part.querySelectorAll(":scope > measure")].forEach((meas, idx) => {
+        const entry = measures[idx] || (measures[idx] = { number: meas.getAttribute("number"), length: 0, beatLen: 0, notes: [] });
+        let time = 0, lastOnset = 0, maxTime = 0;
+        for (const el of meas.children) {
+          const tag = el.tagName;
+          if (tag === "attributes") {
+            const d = el.querySelector("divisions");
+            if (d) divisions = +d.textContent;
+            const b = el.querySelector("time > beats"), bt = el.querySelector("time > beat-type");
+            if (b) beats = +b.textContent;
+            if (bt) beatType = +bt.textContent;
+          } else if (tag === "backup") {
+            time -= +el.querySelector("duration").textContent;
+          } else if (tag === "forward") {
+            time += +el.querySelector("duration").textContent;
+          } else if (tag === "note") {
+            if (el.querySelector("grace")) continue;
+            const dur = +(el.querySelector("duration")?.textContent || 0);
+            const isChord = !!el.querySelector("chord");
+            const onset = isChord ? lastOnset : time;
+            if (!isChord) { lastOnset = time; time += dur; }
+            const p = el.querySelector("pitch");
+            if (p) {
+              const step = p.querySelector("step").textContent;
+              const alter = +(p.querySelector("alter")?.textContent || 0);
+              const octave = +p.querySelector("octave").textContent;
+              entry.notes.push({ midi: (octave + 1) * 12 + STEP_SEMIS[step] + alter, onset: onset / divisions, dur: dur / divisions });
+            }
+          }
+          maxTime = Math.max(maxTime, time);
+        }
+        // Lengths in quarter notes
+        entry.beatLen = 4 / beatType;
+        entry.length = Math.max(entry.length, maxTime / divisions, 0.0001);
+      });
+    }
+    return { title, measures };
+  }
+
+  // Best-fit chord for a group of notes, weighted by duration
+  const FIT_TYPES = ["M", "m", "7", "maj7", "m7", "dim", "m7b5"].map(id => TYPE[id]);
+  // Guess the key of the whole piece so ambiguous chords lean towards it (Em over E in E minor)
+  function detectKey(notes) {
+    const w = new Array(12).fill(0);
+    notes.forEach(n => w[n.midi % 12] += n.dur);
+    const last = notes.length ? notes.reduce((a, b) => (b.onset >= a.onset && b.midi <= a.midi ? b : a)) : null;
+    let best = null;
+    for (let root = 0; root < 12; root++) {
+      for (const mode of ["major", "minor"]) {
+        const steps = mode === "major" ? [0,2,4,5,7,9,11] : [0,2,3,5,7,8,10];
+        let score = steps.reduce((a, st) => a + w[(root + st) % 12], 0) + 0.3 * w[root];
+        if (last && last.midi % 12 === root) score += 0.05 * notes.length;
+        if (!best || score > best.score) best = { score, root, mode };
+      }
+    }
+    if (!best) return null;
+    // Minor keys also allow the raised 7th (harmonic minor), for the major V chord
+    const steps = best.mode === "major" ? [0,2,4,5,7,9,11] : [0,2,3,5,7,8,10,11];
+    return { ...best, pcs: new Set(steps.map(st => (best.root + st) % 12)) };
+  }
+
+  function fitChord(notes, key) {
+    if (new Set(notes.map(n => n.midi % 12)).size < 3) return null;
+    const w = new Array(12).fill(0);
+    notes.forEach(n => w[n.midi % 12] += n.dur);
+    const total = w.reduce((a, b) => a + b, 0);
+    const bassC = notes.reduce((a, b) => (b.midi < a.midi ? b : a)).midi % 12;
+    let best = null;
+    for (let root = 0; root < 12; root++) {
+      for (const type of FIT_TYPES) {
+        const tones = new Set(type.iv.map(i => (root + i) % 12));
+        let inW = 0, outW = 0, missing = 0;
+        for (let c = 0; c < 12; c++) (tones.has(c) ? (inW += w[c]) : (outW += w[c]));
+        type.iv.forEach((i, k) => { if (!w[(root + i) % 12]) missing += k === 2 && i === 7 ? 0.3 : 1; });
+        // Seventh chords only when at least 3 of their 4 notes are there and the
+        // non-fifth tones are not just short passing notes
+        if (type.iv.length > 3 && missing >= 1) continue;
+        if (type.iv.length > 3 && type.iv.some(i => i !== 7 && i !== 6 && w[(root + i) % 12] < 0.15 * total)) continue;
+        let score = inW - 0.7 * outW - 0.18 * total * missing;
+        if (bassC === root) score += 0.2 * total;
+        if (type.iv.length > 3) score -= 0.02 * total;
+        if (key && type.iv.every(i => key.pcs.has((root + i) % 12))) score += 0.1 * total;
+        if (type.id === "dim" || type.id === "m7b5") score -= 0.04 * total;
+        if (!best || score > best.score) best = { score, root, type };
+      }
+    }
+    const bassInChord = best.type.iv.some(i => (best.root + i) % 12 === bassC);
+    return { rootC: best.root, type: best.type, bassC: bassInChord ? bassC : null };
+  }
+
+  function renderSheet() {
+    const info = $("xml-info");
+    if (!xmlMeasures.length) { info.innerHTML = ""; return; }
+    const split = $("xml-split").value;
+    const key = detectKey(xmlMeasures.flatMap(m => m.notes));
+    let html = `<div class="section-title">${esc(xmlTitle)}${key ? " · probably " + pc(key.root) + " " + key.mode : ""}</div><div class="measures">`;
+    xmlMeasures.forEach((m, idx) => {
+      const parts = split === "beat" ? Math.max(1, Math.round(m.length / m.beatLen)) : Math.min(+split, Math.max(1, Math.round(m.length / m.beatLen)));
+      const segLen = m.length / parts;
+      const segs = [];
+      for (let s = 0; s < parts; s++) {
+        const notes = m.notes.filter(n => n.onset >= s * segLen - 1e-6 && n.onset < (s + 1) * segLen - 1e-6);
+        const fit = fitChord(notes, key);
+        const prev = segs[segs.length - 1];
+        const sym = fit ? chordSymbol(fit.rootC, fit.type, fit.bassC) : null;
+        // Merge repeated chords so a measure of Em reads "Em", not "Em Em"
+        if (prev && sym && prev.sym === sym) { prev.notes = prev.notes.concat(notes); continue; }
+        segs.push({ sym, fit, notes });
+      }
+      html += `<div class="measure"><div class="mnum">m${esc(m.number)}</div><div class="chips">` +
+        segs.map((s, k) => s.sym
+          ? chip(s.sym, `data-seg="${idx}|${k}"`)
+          : `<span class="chip">${s.notes.length ? [...new Set(s.notes.map(n => pc(n.midi)))].join(" ") : "rest"}</span>`).join("") +
+        "</div></div>";
+      m.segs = segs;
+    });
+    info.innerHTML = html + "</div>";
+  }
+
+  let xmlTitle = "";
+  $("xml-file").addEventListener("change", async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const parsed = parseMusicXML(await file.text());
+      xmlTitle = parsed.title;
+      xmlMeasures = parsed.measures;
+      renderSheet();
+    } catch (err) {
+      $("xml-info").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+    }
+  });
+  $("xml-split").addEventListener("change", renderSheet);
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-seg]");
+    if (!b) return;
+    const [mi, si] = b.dataset.seg.split("|").map(Number);
+    const m = xmlMeasures[mi], seg = m.segs[si];
+    document.querySelectorAll("[data-seg]").forEach(x => x.classList.toggle("active", x === b));
+    overlay = { label: `m${m.number} notes (${b.textContent})`, midis: new Set(seg.notes.map(n => n.midi)) };
+    // Voice slash chords as the matching inversion so the bass note is lowest
+    const { rootC, type, bassC } = seg.fit;
+    const k = bassC === null ? 0 : type.iv.findIndex(i => (rootC + i) % 12 === bassC);
+    setSelection(voicing(rootC, type, k));
+  });
+
+  // ---------- MIDI input ----------
+  const held = new Set();
+  function onMidiMessage(e) {
+    const [status, note, vel] = e.data;
+    const cmd = status & 0xf0;
+    if (cmd === 0x90 && vel > 0) {
+      // A new chord starts when you press a key with nothing held down
+      if (!held.size) selected.clear();
+      held.add(note);
+      selected.add(note);
+      if ($("midi-sound").checked) playNotes([note], true);
+      render();
+    } else if (cmd === 0x80 || (cmd === 0x90 && vel === 0)) {
+      held.delete(note);
+    }
+  }
+  function attachInputs(access) {
+    const inputs = [...access.inputs.values()];
+    inputs.forEach(i => i.onmidimessage = onMidiMessage);
+    $("midi-status").textContent = inputs.length
+      ? "Connected: " + inputs.map(i => i.name).join(", ")
+      : "No MIDI device found. Plug one in.";
+  }
+  $("midi").addEventListener("click", async () => {
+    if (!navigator.requestMIDIAccess) {
+      $("midi-status").textContent = "This browser has no Web MIDI support (use Chrome or Edge).";
+      return;
+    }
+    try {
+      const access = await navigator.requestMIDIAccess();
+      attachInputs(access);
+      access.onstatechange = () => attachInputs(access);
+    } catch (err) {
+      $("midi-status").textContent = "MIDI access denied.";
+    }
+  });
+
+  // ---------- Controls ----------
+  $("clear").addEventListener("click", () => { selected.clear(); render(); });
+  $("play").addEventListener("click", () => playNotes([...selected].sort((a, b) => a - b), true));
+  $("overlay-clear").addEventListener("click", () => {
+    document.querySelectorAll("[data-seg]").forEach(x => x.classList.remove("active"));
+    setOverlay(null);
+  });
+  spellingEl.addEventListener("change", () => { render(); renderChordList(); renderSheet(); });
+
+  renderChordList();
+  render();
+</script>
+</body>
+</html>
