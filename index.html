@@ -1013,7 +1013,8 @@
       xmlMeasures = parsed.measures;
       stopPlayback();
       playFrom = 0;
-      loopStart = loopEnd = pickFirst = null;
+      playFromPos = 0;
+      loopFrom = loopTo = pickFirst = null;
       loopPick = null;
       setTempo(parsed.tempo || 100);
       buildTimeline();
@@ -1217,9 +1218,10 @@
 
   function updatePlayFrom() {
     const m = xmlMeasures[playFrom];
-    $("play-from").textContent = m ? `Starts from m${m.number}` : "";
+    const beat = m ? (playFromPos - m.start) / m.beatLen + 1 : 1;
+    $("play-from").textContent = m ? `Starts from m${m.number}${beat > 1.001 ? ", beat " + +beat.toFixed(2) : ""}` : "";
     document.querySelectorAll(".measure").forEach(x => x.classList.toggle("start", +x.dataset.measure === playFrom));
-    if (!playing && m) moveCursor(m.start);
+    if (!playing && m) moveCursor(playFromPos);
     drawScoreMarks();
   }
 
@@ -1229,7 +1231,7 @@
     else if (pausedAt !== null) { const p = pausedAt; pausedAt = null; startPlayback(p); }
     else {
       resetStats();
-      startPlayback(loopStart !== null && $("loop").checked ? xmlMeasures[loopStart].start : xmlMeasures[playFrom].start);
+      startPlayback(loopFrom !== null && $("loop").checked ? loopFrom : playFromPos);
     }
   });
   $("xml-stop").addEventListener("click", stopPlayback);
@@ -1237,69 +1239,99 @@
 
   // Clicking a measure (chip grid or score) sets the start point and jumps there if playing.
   // In "Set loop" mode the first click picks the loop start and the second its end.
-  function handleMeasureClick(idx) {
-    if (loopPick) { pickLoop(idx); return; }
+  // pos (quarter notes) is an exact note position from a score click; chips use the measure start
+  function handleMeasureClick(idx, pos = null) {
+    if (loopPick) { pickLoop(idx, pos); return; }
     playFrom = idx;
+    playFromPos = pos ?? xmlMeasures[idx].start;
     updatePlayFrom();
-    if (playing) { haltAudio(); startAt(xmlMeasures[playFrom].start); }
-    else if (pausedAt !== null) pausedAt = xmlMeasures[playFrom].start;
+    if (playing) { haltAudio(); startAt(playFromPos); }
+    else if (pausedAt !== null) pausedAt = playFromPos;
   }
+  let playFromPos = 0;
   document.addEventListener("click", e => {
     const meas = e.target.closest("[data-measure]");
     if (meas) handleMeasureClick(+meas.dataset.measure);
   });
 
   // ---------- Loop section ----------
-  let loopStart = null, loopEnd = null; // measure indices, inclusive
-  let loopPick = null;                  // null | "start" | "end"
-  let pickFirst = null;
+  // Score clicks loop from/to an exact note; chord chips use whole measures
+  let loopFrom = null, loopTo = null; // quarter-note positions, end exclusive
+  let loopPick = null;                // null | "start" | "end"
+  let pickFirst = null;               // { idx, start, end, whole } of the first click
+  let loopEndLabel = "";
 
   // Section that playback repeats: the picked loop, or from the start point to the end
   function loopRange() {
     if (!$("loop").checked || !xmlMeasures.length) return null;
-    if (loopStart !== null) {
-      const e = xmlMeasures[loopEnd];
-      return { from: xmlMeasures[loopStart].start, to: e.start + e.length };
-    }
-    return { from: xmlMeasures[playFrom].start, to: totalLen };
+    if (loopFrom !== null) return { from: loopFrom, to: loopTo };
+    return { from: playFromPos, to: totalLen };
+  }
+
+  // A clicked point covers one note (score) or a whole measure (chip)
+  function pickPoint(idx, pos) {
+    const m = xmlMeasures[idx];
+    if (pos === null) return { idx, start: m.start, end: m.start + m.length, whole: true };
+    const rel = pos - m.start;
+    const next = noteColumns(idx).find(c => c.rel > rel + 1e-4);
+    return { idx, start: pos, end: m.start + (next ? next.rel : m.length) };
+  }
+
+  function measureAt(pos, isEnd = false) {
+    return xmlMeasures.findIndex(m => isEnd
+      ? pos > m.start + 1e-6 && pos <= m.start + m.length + 1e-6
+      : pos >= m.start - 1e-6 && pos < m.start + m.length - 1e-6);
+  }
+
+  function fmtPos(pos, isEnd = false) {
+    const m = xmlMeasures[measureAt(pos, isEnd)];
+    if (!m) return "?";
+    if (isEnd && Math.abs(pos - m.start - m.length) < 1e-6) return `end of m${m.number}`;
+    const beat = (pos - m.start) / m.beatLen + 1;
+    return beat > 1.001 ? `m${m.number} beat ${+beat.toFixed(2)}` : `m${m.number}`;
   }
 
   function setPickMode(mode) {
     loopPick = mode;
     const btn = $("loop-set");
     btn.classList.toggle("armed", !!mode);
-    btn.textContent = mode === "start" ? "Click start measure..." : mode === "end" ? "Click end measure..." : "Set loop";
+    btn.textContent = mode === "start" ? "Click loop start..." : mode === "end" ? "Click loop end..." : "Set loop";
     $("tab-sheet").classList.toggle("picking", !!mode);
     $("score").classList.toggle("picking", !!mode);
     updateLoopMarks();
   }
 
-  function pickLoop(idx) {
-    if (loopPick === "start") { pickFirst = idx; setPickMode("end"); return; }
-    loopStart = Math.min(pickFirst, idx);
-    loopEnd = Math.max(pickFirst, idx);
+  function pickLoop(idx, pos = null) {
+    const p = pickPoint(idx, pos);
+    if (loopPick === "start") { pickFirst = p; setPickMode("end"); return; }
+    // Either click order works; the loop always includes both clicked notes
+    loopFrom = Math.min(pickFirst.start, p.start);
+    loopTo = Math.max(pickFirst.end, p.end);
+    // Label the end by the last note included (or "end of m" for a whole measure)
+    const last = p.start >= pickFirst.start ? p : pickFirst;
+    loopEndLabel = last.whole ? `end of m${xmlMeasures[last.idx].number}` : fmtPos(last.start);
     pickFirst = null;
     $("loop").checked = true;
     setPickMode(null);
-    if (playing) { haltAudio(); startAt(xmlMeasures[loopStart].start); }
-    else { playFrom = loopStart; updatePlayFrom(); pausedAt = null; $("xml-play").textContent = "Play"; }
+    if (playing) { haltAudio(); startAt(loopFrom); }
+    else { playFrom = measureAt(loopFrom); playFromPos = loopFrom; updatePlayFrom(); pausedAt = null; $("xml-play").textContent = "Play"; }
   }
 
   function clearLoop() {
-    loopStart = loopEnd = pickFirst = null;
+    loopFrom = loopTo = pickFirst = null;
     setPickMode(null);
   }
 
   function updateLoopMarks() {
     const info = $("loop-info");
-    $("loop-clear").hidden = loopStart === null;
-    info.textContent = loopStart !== null
-      ? `Loop: m${xmlMeasures[loopStart].number} to m${xmlMeasures[loopEnd].number}${$("loop").checked ? "" : " (Loop off)"}`
+    $("loop-clear").hidden = loopFrom === null;
+    info.textContent = loopFrom !== null
+      ? `Loop: ${fmtPos(loopFrom)} to ${loopEndLabel}${$("loop").checked ? "" : " (Loop off)"}`
       : "";
     document.querySelectorAll(".measure").forEach(x => {
-      const i = +x.dataset.measure;
-      x.classList.toggle("inloop", loopStart !== null && i >= loopStart && i <= loopEnd);
-      x.classList.toggle("pending", pickFirst !== null && i === pickFirst);
+      const m = xmlMeasures[+x.dataset.measure];
+      x.classList.toggle("inloop", loopFrom !== null && m.start < loopTo - 1e-6 && m.start + m.length > loopFrom + 1e-6);
+      x.classList.toggle("pending", pickFirst !== null && +x.dataset.measure === pickFirst.idx);
     });
     drawScoreMarks();
   }
@@ -1336,7 +1368,7 @@
     await osmd.load(text);
     osmd.render();
     indexCursor();
-    moveCursor(xmlMeasures[playFrom]?.start || 0);
+    moveCursor(playFromPos);
     setPickMode(null);
   }
 
@@ -1383,7 +1415,7 @@
     resizeTimer = setTimeout(() => {
       if (!osmd) return;
       indexCursor();
-      moveCursor(playing ? position() : (xmlMeasures[playFrom]?.start || 0));
+      moveCursor(playing ? position() : playFromPos);
       drawScoreMarks();
     }, 400);
   });
@@ -1391,13 +1423,34 @@
 
   // ---------- Score measure boxes (click targets and loop shading) ----------
   // OSMD positions are in units of 10px at zoom 1
-  function measureBoxes() {
-    if (!osmd?.GraphicSheet) return [];
+  function scoreOrigin() {
     const svg = $("score").querySelector("svg"), box = $("score");
-    if (!svg) return [];
+    if (!osmd?.GraphicSheet || !svg) return null;
     const sr = svg.getBoundingClientRect(), br = box.getBoundingClientRect();
-    const ox = sr.left - br.left + box.scrollLeft, oy = sr.top - br.top + box.scrollTop;
-    const u = 10 * osmd.zoom;
+    return { ox: sr.left - br.left + box.scrollLeft, oy: sr.top - br.top + box.scrollTop, u: 10 * osmd.zoom };
+  }
+
+  // Note columns of a measure across all staves: [{ x (px), rel (quarters from measure start) }]
+  function noteColumns(idx) {
+    const o = scoreOrigin();
+    const staves = o && osmd.GraphicSheet.MeasureList[idx];
+    if (!staves) return [];
+    const cols = new Map();
+    for (const gm of staves) {
+      for (const se of gm?.staffEntries || []) {
+        const rel = se.relInMeasureTimestamp.RealValue * 4;
+        const x = o.ox + se.PositionAndShape.AbsolutePosition.x * o.u;
+        const key = rel.toFixed(4);
+        if (!cols.has(key) || x < cols.get(key).x) cols.set(key, { x, rel });
+      }
+    }
+    return [...cols.values()].sort((a, b) => a.rel - b.rel);
+  }
+
+  function measureBoxes() {
+    const o = scoreOrigin();
+    if (!o) return [];
+    const { ox, oy, u } = o;
     return osmd.GraphicSheet.MeasureList.map(staves => {
       const first = staves.find(Boolean), last = [...staves].reverse().find(Boolean);
       if (!first) return null;
@@ -1422,10 +1475,28 @@
       Object.assign(d.style, { left: b.x + "px", top: b.y + "px", width: b.w + "px", height: b.h + "px" }, style);
       box.appendChild(d);
     };
-    if (loopStart !== null) for (let i = loopStart; i <= loopEnd; i++) boxes[i] && add("loop-box", boxes[i]);
-    if (pickFirst !== null && boxes[pickFirst]) add("loop-box pending", boxes[pickFirst]);
+    // Shade [from, to) measure by measure, cutting at note columns inside a measure
+    const xAt = (i, pos) => {
+      const m = xmlMeasures[i], b = boxes[i];
+      if (pos <= m.start + 1e-6) return b.x;
+      if (pos >= m.start + m.length - 1e-6) return b.x + b.w;
+      const col = noteColumns(i).find(c => Math.abs(c.rel - (pos - m.start)) < 1e-4);
+      return col ? col.x - 6 : b.x;
+    };
+    const shade = (from, to, cls) => xmlMeasures.forEach((m, i) => {
+      if (!boxes[i] || m.start >= to - 1e-6 || m.start + m.length <= from + 1e-6) return;
+      const l = xAt(i, Math.max(from, m.start)), r = xAt(i, Math.min(to, m.start + m.length));
+      add(cls, { ...boxes[i], x: l, w: Math.max(4, r - l) });
+    });
+    if (loopFrom !== null) shade(loopFrom, loopTo, "loop-box");
+    if (pickFirst !== null) shade(pickFirst.start, pickFirst.end, "loop-box pending");
     const sb = boxes[playFrom];
-    if (sb) add("start-mark", sb, { width: "3px" });
+    if (sb) {
+      // Put the start line at the exact note when the start isn't the measure's first beat
+      const rel = playFromPos - xmlMeasures[playFrom].start;
+      const col = noteColumns(playFrom).find(c => Math.abs(c.rel - rel) < 1e-4);
+      add("start-mark", { ...sb, x: col && rel > 1e-4 ? col.x - 6 : sb.x }, { width: "3px" });
+    }
   }
 
   $("score").addEventListener("click", e => {
@@ -1433,7 +1504,11 @@
     const br = $("score").getBoundingClientRect();
     const x = e.clientX - br.left + $("score").scrollLeft, y = e.clientY - br.top + $("score").scrollTop;
     const idx = boxes.findIndex(b => b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
-    if (idx !== -1) handleMeasureClick(idx);
+    if (idx === -1) return;
+    // Snap to the nearest note column (loops stay measure-based)
+    const cols = noteColumns(idx);
+    const near = cols.reduce((a, c) => (!a || Math.abs(c.x - x) < Math.abs(a.x - x) ? c : a), null);
+    handleMeasureClick(idx, near ? xmlMeasures[idx].start + near.rel : null);
   });
 
 
