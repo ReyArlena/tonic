@@ -151,7 +151,21 @@
   .measure.start { border-color: var(--accent); }
   .measure.now { background: var(--accent-soft); }
   .chip.now { background: var(--play); color: #fff; }
-  .player { margin-top: 12px; }
+  .playbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    background: var(--panel); border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08); padding: 8px 16px;
+  }
+  .playbar[hidden] { display: none; }
+  .playbar-inner {
+    max-width: 1100px; margin: 0 auto;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px;
+  }
+  .playbar .group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .playbar .group-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .playbar input[type=range] { width: 120px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 76px; }
+  button.primary:hover { filter: brightness(1.08); }
   /* Score is always drawn on white paper, also in dark mode */
   .score {
     margin-top: 12px; max-height: 460px; overflow: auto; position: relative;
@@ -176,7 +190,6 @@
   .measure.pending { background: rgba(47, 111, 222, 0.14); }
   .picking .measure, .picking.score { cursor: pointer; }
   button.armed { border-color: var(--play); color: var(--play); font-weight: 600; }
-  .player input[type=range] { width: 140px; }
   @media (max-width: 600px) {
     .degree-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   }
@@ -268,27 +281,6 @@
           </select>
         </label>
       </div>
-      <div class="row player" id="player" hidden>
-        <button id="xml-play">Play</button>
-        <button id="xml-stop">Stop</button>
-        <label>Tempo <input type="range" id="tempo" min="30" max="220" value="100"> <span id="tempo-val">100</span> BPM</label>
-        <label>Volume <input type="range" id="volume" min="0" max="100" value="80"> <span id="volume-val">80</span>%</label>
-        <label><input type="checkbox" id="loop"> Loop</label>
-        <button id="loop-set">Set loop</button>
-        <button id="loop-clear" hidden>Clear loop</button>
-        <span class="status" id="loop-info"></span>
-        <label><input type="checkbox" id="rh" checked> Right hand sound</label>
-        <label><input type="checkbox" id="lh" checked> Left hand sound</label>
-        <label><input type="checkbox" id="wait"> Wait for me</label>
-        <select id="practice-hand" title="Which hand you play in Wait mode">
-          <option value="RL">Practice both hands</option>
-          <option value="R">Practice right hand</option>
-          <option value="L">Practice left hand</option>
-        </select>
-        <label><input type="checkbox" id="any-octave" checked> Any octave</label>
-        <span class="stats" id="practice-stats"></span>
-        <span class="status" id="play-from"></span>
-      </div>
       <div class="score" id="score" hidden></div>
       <p class="status">Uncompressed MusicXML only (.musicxml / .xml, not .mxl). Click a chord to see it on the piano;
         the actual notes in that part of the music turn green. Click a measure to play from there.
@@ -297,6 +289,42 @@
     </div>
   </div>
 </main>
+
+<!-- Playback controls, fixed to the bottom of the window once sheet music is loaded -->
+<div class="playbar" id="player" hidden>
+  <div class="playbar-inner">
+    <div class="group">
+      <button id="xml-play" class="primary">Play</button>
+      <button id="xml-stop">Stop</button>
+      <span class="status" id="play-from"></span>
+    </div>
+    <div class="group">
+      <label>Tempo <input type="range" id="tempo" min="30" max="220" value="100"> <span id="tempo-val">100</span> BPM</label>
+      <label>Volume <input type="range" id="volume" min="0" max="100" value="80"> <span id="volume-val">80</span>%</label>
+    </div>
+    <div class="group">
+      <label><input type="checkbox" id="loop"> Loop</label>
+      <button id="loop-set">Set loop</button>
+      <button id="loop-clear" hidden>Clear loop</button>
+      <span class="status" id="loop-info"></span>
+    </div>
+    <div class="group">
+      <span class="group-title">Sound</span>
+      <label><input type="checkbox" id="rh" checked> Right hand</label>
+      <label><input type="checkbox" id="lh" checked> Left hand</label>
+    </div>
+    <div class="group">
+      <label><input type="checkbox" id="wait"> Wait for me</label>
+      <select id="practice-hand" title="Which hand you play in Wait mode">
+        <option value="RL">Practice both hands</option>
+        <option value="R">Practice right hand</option>
+        <option value="L">Practice left hand</option>
+      </select>
+      <label><input type="checkbox" id="any-octave" checked> Any octave</label>
+      <span class="stats" id="practice-stats"></span>
+    </div>
+  </div>
+</div>
 
 <script src="tonal.min.js"></script>
 <script src="piano-samples.js"></script>
@@ -1654,6 +1682,13 @@
     updateStats();
     if (playing) { const p = position(); haltAudio(); startAt(p); }
   }));
+
+
+  // ---------- Bottom playback bar ----------
+  // Pad the page by the bar's height so it never covers the content
+  new ResizeObserver(() => {
+    document.body.style.paddingBottom = $("player").hidden ? "" : $("player").offsetHeight + "px";
+  }).observe($("player"));
 
   // ---------- MIDI input ----------
   const held = new Set();
