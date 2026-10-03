@@ -371,6 +371,7 @@
   .switch:checked { background: var(--accent); }
   .switch:checked::after { transform: translateX(16px); }
   .field-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 6px 0; font-size: 0.9rem; }
+  .field-row .hint { display: block; color: var(--muted); font-size: 0.78rem; }
   .settings { min-width: 280px; }
   .settings hr { border: none; border-top: 1px solid var(--border); margin: 6px 0; }
   .danger-btn {
@@ -503,8 +504,9 @@
         <button class="icon-btn" data-tip="Settings"><span class="ic" data-ic="gear-six"></span></button>
         <div class="popover">
           <div class="pop-body settings">
-            <div class="field-row">Note spelling
+            <div class="field-row"><span>Key labels<small class="hint">Auto follows the chord, scale or key</small></span>
               <select id="spelling">
+                <option value="auto">Auto</option>
                 <option value="sharp">Sharps (C#)</option>
                 <option value="flat">Flats (Db)</option>
               </select>
@@ -880,8 +882,28 @@
   const $ = id => document.getElementById(id);
   const pianoEl = $("piano"), resultEl = $("result"), spellingEl = $("spelling"), soundEl = $("sound");
 
-  const names = () => spellingEl.value === "flat" ? FLATS : SHARPS;
-  const pc = midi => names()[((midi % 12) + 12) % 12];
+  // Key labels: fixed sharps / flats, or Auto, which follows what's on screen:
+  // the selected chord, then a highlighted scale or key, then the song's key (sheet view), then sharps
+  let chordSpell = new Map(); // chroma -> name, from the detected chord
+  let songSpell = new Map();  // chroma -> name, from the loaded song's key
+  const pc = midi => {
+    const c = ((midi % 12) + 12) % 12;
+    if (spellingEl.value === "sharp") return SHARPS[c];
+    if (spellingEl.value === "flat") return FLATS[c];
+    return chordSpell.get(c) ?? overlay?.spell?.get(c)
+      ?? ($("view-sheet").classList.contains("active") ? songSpell.get(c) : undefined) ?? SHARPS[c];
+  };
+  // Selected notes and intervals always use the chord's own spelling when there is one
+  const spellNote = midi => chordSpell.get(((midi % 12) + 12) % 12) ?? pc(midi);
+
+  function updateChordSpell() {
+    chordSpell = new Map();
+    const midis = [...selected].sort((a, b) => a - b);
+    const raw = [...new Set(midis.map(m => SHARPS[m % 12]))];
+    if (raw.length < 3) return;
+    const found = Chord.detect(raw).sort((a, b) => rank(a) - rank(b));
+    if (found.length) Chord.get(respellChord(found[0])).notes.forEach(n => chordSpell.set(Note.chroma(n), n));
+  }
   const octaveOf = midi => Math.floor(midi / 12) - 1;
   const mod12 = x => ((x % 12) + 12) % 12;
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -1176,6 +1198,7 @@
   }
 
   function render() {
+    updateChordSpell();
     renderKeys();
     renderResult();
     markActiveCards();
@@ -1231,19 +1254,20 @@
       return;
     }
 
+    // Detect from neutral (sharp) names; display names come from spellNote
     const pcs = [];
-    for (const m of midis) if (!pcs.includes(pc(m))) pcs.push(pc(m));
+    for (const m of midis) if (!pcs.includes(SHARPS[m % 12])) pcs.push(SHARPS[m % 12]);
     const chromas = [...new Set(midis.map(m => m % 12))];
     const bass = midis[0];
 
-    let html = `<div class="result-head"><div class="notes">${midis.map(m => pc(m) + octaveOf(m)).join(" · ")}</div>`;
+    let html = `<div class="result-head"><div class="notes">${midis.map(m => spellNote(m) + octaveOf(m)).join(" · ")}</div>`;
     let secs = "";
     let mainChord = null;
 
     if (pcs.length === 1) {
-      html += `<div class="chord">${pcs[0]}</div><div class="chord-name">${midis.length > 1 ? "Octaves" : "Single note"}</div>`;
+      html += `<div class="chord">${spellNote(midis[0])}</div><div class="chord-name">${midis.length > 1 ? "Octaves" : "Single note"}</div>`;
     } else if (pcs.length === 2 && midis.length === 2) {
-      html += `<div class="chord">${pcs[0]} - ${pcs[1]}</div><div class="chord-name">Interval: ${intervalName(midis[1] - midis[0])}</div>`;
+      html += `<div class="chord">${spellNote(midis[0])} - ${spellNote(midis[1])}</div><div class="chord-name">Interval: ${intervalName(midis[1] - midis[0])}</div>`;
     } else {
       const found = Chord.detect(pcs).sort((a, b) => rank(a) - rank(b));
       if (found.length) {
@@ -1264,8 +1288,8 @@
 
     // Intervals from the bass
     if (midis.length > 1) {
-      secs += section("intervals", `Intervals from the bass (${pc(bass)}${octaveOf(bass)})`, '<div class="intervals">' +
-        midis.slice(1).map(m => `<span>${pc(m)}${octaveOf(m)}</span><span>${intervalName(m - bass)}</span>`).join("") + "</div>");
+      secs += section("intervals", `Intervals from the bass (${spellNote(bass)}${octaveOf(bass)})`, '<div class="intervals">' +
+        midis.slice(1).map(m => `<span>${spellNote(m)}${octaveOf(m)}</span><span>${intervalName(m - bass)}</span>`).join("") + "</div>");
     }
 
     // Inversions
@@ -1335,7 +1359,7 @@
 
   function showScale(root, type, extra = {}) {
     const s = scaleData(root, type);
-    setOverlay({ id: Note.chroma(root) + "|" + type, label: `${root} ${type} (${s.notes.join(" ")})`, pcs: new Set(s.chromas), tonic: s.tonic, ...extra });
+    setOverlay({ id: Note.chroma(root) + "|" + type, spell: new Map(s.notes.map(n => [Note.chroma(n), n])), label: `${root} ${type} (${s.notes.join(" ")})`, pcs: new Set(s.chromas), tonic: s.tonic, ...extra });
   }
 
   // Delegated clicks for any chip with data attributes
@@ -1615,6 +1639,7 @@
     const split = $("xml-split").value;
     const key = detectKey(xmlMeasures.flatMap(m => m.notes));
     songKey = key;
+    songSpell = key ? new Map(Scale.get(scaleRoot(key.root, key.mode) + " " + key.mode).notes.map(n => [Note.chroma(n), n])) : new Map();
     $("sheet-key").textContent = key ? `Key: ${scaleRoot(key.root, key.mode)} ${key.mode} (best guess)` : "";
     let html = `<div class="measures">`;
     xmlMeasures.forEach((m, idx) => {
@@ -2672,6 +2697,7 @@
     $(v === "theory" ? "theory-result-slot" : "sheet-result-slot").appendChild(resultEl);
     ui.view = v;
     saveUi();
+    renderKeys();
     requestAnimationFrame(checkScoreSize);
   }
   document.querySelectorAll("#views-nav button").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
@@ -2741,7 +2767,8 @@
     document.querySelectorAll("[data-seg]").forEach(x => x.classList.remove("active"));
     setOverlay(null);
   });
-  spellingEl.addEventListener("change", () => { render(); renderChordList(); renderSheet(); });
+  spellingEl.value = ui.spelling || "auto";
+  spellingEl.addEventListener("change", () => { ui.spelling = spellingEl.value; saveUi(); render(); renderChordList(); renderSheet(); });
 
   renderRootRows();
   renderChordList();
