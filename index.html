@@ -164,7 +164,7 @@
   .start-mark { position: absolute; width: 3px; border-radius: 2px; background: var(--accent); pointer-events: none; }
   .measure.inloop { background: rgba(238, 138, 31, 0.14); }
   .measure.pending { background: rgba(47, 111, 222, 0.14); }
-  .picking .measure, .picking.score { cursor: crosshair; }
+  .picking .measure, .picking.score { cursor: pointer; }
   button.armed { border-color: var(--play); color: var(--play); font-weight: 600; }
   .player input[type=range] { width: 140px; }
   @media (max-width: 600px) {
@@ -1480,8 +1480,11 @@
       const m = xmlMeasures[i], b = boxes[i];
       if (pos <= m.start + 1e-6) return b.x;
       if (pos >= m.start + m.length - 1e-6) return b.x + b.w;
-      const col = noteColumns(i).find(c => Math.abs(c.rel - (pos - m.start)) < 1e-4);
-      return col ? col.x - 6 : b.x;
+      // Cut halfway between this note and the one before, so wide lyrics on either side stay clear
+      const cols = noteColumns(i);
+      const k = cols.findIndex(c => Math.abs(c.rel - (pos - m.start)) < 1e-4);
+      if (k === -1) return b.x;
+      return k > 0 ? (cols[k - 1].x + cols[k].x) / 2 : cols[k].x - 6;
     };
     const shade = (from, to, cls) => xmlMeasures.forEach((m, i) => {
       if (!boxes[i] || m.start >= to - 1e-6 || m.start + m.length <= from + 1e-6) return;
