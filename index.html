@@ -2047,15 +2047,17 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     const tempo = tempoEl ? +tempoEl.getAttribute("tempo") : +(doc.querySelector("metronome per-minute")?.textContent || 0) || null;
 
     [...doc.querySelectorAll("part")].forEach((part, partIdx) => {
-      let divisions = 1, beats = 4, beatType = 4;
+      let divisions = 1, beats = 4, beatType = 4, fifths = 0; // fifths: the key signature (sharps +, flats -)
       [...part.querySelectorAll(":scope > measure")].forEach((meas, idx) => {
-        const entry = measures[idx] || (measures[idx] = { number: meas.getAttribute("number"), length: 0, beatLen: 0, notes: [] });
+        const entry = measures[idx] || (measures[idx] = { number: meas.getAttribute("number"), length: 0, beatLen: 0, fifths, notes: [] });
         let time = 0, lastOnset = 0, maxTime = 0;
         for (const el of meas.children) {
           const tag = el.tagName;
           if (tag === "attributes") {
             const d = el.querySelector("divisions");
             if (d) divisions = +d.textContent;
+            const f = el.querySelector("key > fifths");
+            if (f) { fifths = +f.textContent; if (partIdx === 0) entry.fifths = fifths; }
             const b = el.querySelector("time > beats"), bt = el.querySelector("time > beat-type");
             if (b) beats = +b.textContent;
             if (bt) beatType = +bt.textContent;
@@ -3210,6 +3212,21 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     hitNotes.forEach(n => paintHit(n.pos, n.midi));
   }
 
+  // How a wrong key is written in the piece's key signature: { step, octave, sign }.
+  // A note the signature already covers needs no sign; a white key the signature alters gets a natural;
+  // other black keys are sharps in sharp keys and flats in flat keys (your spelling setting in C).
+  function ghostNote(midi, fifths) {
+    const LETTERS = "CDEFGAB", SEMIS = [0, 2, 4, 5, 7, 9, 11], pc = midi % 12;
+    const altered = (fifths > 0 ? "FCGDAEB" : "BEADGCF").slice(0, Math.abs(fifths)), dir = Math.sign(fifths);
+    const at = (step, alter, sign) => ({ step, octave: octaveOf(midi - alter), sign });
+    const inSig = [...altered].find(L => mod12(SEMIS[LETTERS.indexOf(L)] + dir) === pc);
+    if (inSig) return at(inSig, dir, "");
+    const white = SEMIS.indexOf(pc);
+    if (white !== -1) return at(LETTERS[white], 0, altered.includes(LETTERS[white]) ? "\u266e" : "");
+    const alter = dir || staffNote(midi).alter || 1;
+    return at(LETTERS[SEMIS.indexOf(mod12(pc - alter))], alter, alter > 0 ? "\u266f" : "\u266d");
+  }
+
   // Top staff line as a count of note letters from C0: F5 on a treble staff, A3 on a bass staff
   const STAFF_TOP = { 0: 38, 1: 26 };
   function drawMisses() {
@@ -3226,7 +3243,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       const upper = hands.length === 1 ? hands[0] === "R" : midi >= 60;
       const gm = upper ? staves[0] : staves[staves.length - 1];
       const top = STAFF_TOP[gm.InitiallyActiveClef?.ClefType] ?? STAFF_TOP[0];
-      const n = staffNote(midi), d = n.octave * 7 + "CDEFGAB".indexOf(n.step), u = o.u;
+      const n = ghostNote(midi, xmlMeasures[idx].fifths || 0), d = n.octave * 7 + "CDEFGAB".indexOf(n.step), u = o.u;
       const el = document.createElement("div");
       el.className = "miss-note";
       // Origin: the notehead's centre, just right of the printed column
@@ -3236,7 +3253,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       const ledger = k => { html += `<i style="left:${-u}px;top:${(d - k) / 2 * u - 0.06 * u}px;width:${2 * u}px;height:${Math.max(1, 0.12 * u)}px"></i>`; };
       for (let k = top + 2; k <= d; k += 2) ledger(k);
       for (let k = top - 10; k >= d; k -= 2) ledger(k);
-      if (n.alter) html += `<b style="left:${-0.8 * u}px;top:0;font-size:${2 * u}px">${n.alter > 0 ? "\u266f" : "\u266d"}</b>`;
+      if (n.sign) html += `<b style="left:${-0.8 * u}px;top:0;font-size:${2 * u}px">${n.sign}</b>`;
       el.innerHTML = html;
       box.appendChild(el);
     }
