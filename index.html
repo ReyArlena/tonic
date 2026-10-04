@@ -96,7 +96,21 @@
   .overlay-bar .icon-btn:hover { background: rgba(0, 0, 0, 0.08); }
   .overlay-bar .icon-btn .ic { width: 14px; height: 14px; }
 
-  .piano-wrap { overflow-x: auto; overflow-y: hidden; }
+  .kb-row { display: flex; align-items: center; gap: 12px; }
+  .piano-wrap { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+  /* Mini staff: the notes being played, on white paper like the score */
+  .mini-staff {
+    position: relative; flex: none; width: 140px; height: var(--kb-h); overflow: hidden;
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+  }
+  .mini-staff[hidden] { display: none; }
+  .mini-staff svg { display: block; }
+  .mini-staff.on .vf-stavenote path { fill: var(--key-on); stroke: var(--key-on); }
+  .mini-staff.playing .vf-stavenote path { fill: var(--play); stroke: var(--play); }
+  .mini-staff .ottava { position: absolute; right: 7px; font: italic 600 0.68rem Georgia, serif; color: #555; }
+  .mini-staff .ottava.up { top: 4px; }
+  .mini-staff .ottava.down { bottom: 4px; }
+  @media (max-width: 700px) { .mini-staff { display: none; } }
   .piano { position: relative; height: var(--kb-h); margin: 0 auto; user-select: none; touch-action: none; }
   .key { position: absolute; top: 0; border: 1px solid var(--border); border-radius: 0 0 6px 6px; cursor: pointer; }
   .key.white { background: var(--white-key); height: 100%; z-index: 1; }
@@ -238,6 +252,9 @@
   /* Sight reading: one note on a staff (white paper, like the score) */
   .sight-staff { width: 300px; max-width: 100%; height: 250px; display: flex; flex-direction: column; justify-content: center; background: #fff; border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
   .sight-staff svg { display: block; margin: 0 auto; }
+  /* The note you got right turns green; a wrong key shows as a red note beside it */
+  .sight-staff.good .vf-stavenote:not(.wrong) path { fill: #2e9e6a; stroke: #2e9e6a; }
+  .sight-staff .vf-stavenote.wrong path, .sight-staff.miss .vf-stavenote path { fill: #d64545; stroke: #d64545; }
 
   /* Test progress (ear training and sight reading) */
   .view-ear, .view-sight { gap: 12px; grid-auto-rows: max-content; }
@@ -595,6 +612,7 @@
             <label class="switch-row"><span>Sound<small>Play notes when you click keys</small></span><input type="checkbox" id="sound" class="switch" checked></label>
             <hr>
             <label class="switch-row"><span>Highlights in all octaves<small>Off: scales and keys show one octave, from the root</small></span><input type="checkbox" id="all-octaves" class="switch"></label>
+            <label class="switch-row"><span>Mini staff<small>Show the notes you play on a staff beside the piano</small></span><input type="checkbox" id="mini-staff-on" class="switch" checked></label>
             <hr>
             <label class="switch-row"><span>Synth for MIDI<small>Play sound for MIDI input (off if your keyboard has speakers)</small></span><input type="checkbox" id="midi-sound" class="switch"></label>
             <div class="status" id="midi-status">MIDI not connected</div>
@@ -635,7 +653,10 @@
         </div>
       </div>
     </div>
-    <div class="piano-wrap" id="piano-wrap"><div class="piano" id="piano"></div></div>
+    <div class="kb-row">
+      <div class="piano-wrap" id="piano-wrap"><div class="piano" id="piano"></div></div>
+      <div class="mini-staff" id="mini-staff" data-tip="The notes being played, on the staff"></div>
+    </div>
   </section>
 
   <main class="views-area">
@@ -1198,12 +1219,14 @@
     if (!el || +el.dataset.midi === dragKey) return;
     dragKey = +el.dataset.midi;
     playNotes([dragKey]);
+    staffPress(dragKey);
     if (waitActive()) practiceInput(dragKey);
     else flashKey(dragKey);
   });
   ["pointerup", "pointercancel"].forEach(t => window.addEventListener(t, () => { dragKey = null; }));
 
   function toggle(m) {
+    if (!$("select-mode").checked || earActive() || sightActive() || waitActive()) staffPress(m);
     // In ear training, keys are answers (always heard, so you can compare)
     if (earActive()) {
       playNotes([m], true);
@@ -1455,6 +1478,93 @@
     return m >= base && m <= base + 12;
   }
 
+  // ---------- Mini staff ----------
+  // A small grand staff beside the piano showing what's sounding: playback (orange), else the
+  // selection (blue), else the key just pressed (black, for a moment). Middle C and up go on the
+  // treble staff, the rest on the bass staff. Drawn with the same engraver as the sheet music.
+  const miniEl = $("mini-staff");
+  const MINI_ZOOM = 0.75, MINI_TOP = 30; // px from the top of the box to the top staff line
+  let pressed = new Set(), pressedTimer = null;
+  function staffPress(m) {
+    pressed = new Set([m]);
+    clearTimeout(pressedTimer);
+    pressedTimer = setTimeout(() => { pressed = new Set(); renderMiniStaff(); }, 1500);
+    renderMiniStaff();
+  }
+
+  // How a key is written on the staff, following the key labels: { step, alter, octave }
+  function staffNote(m) {
+    const name = spellNote(m);
+    const alter = [...name.slice(1)].reduce((a, c) => a + (c === "#" ? 1 : c === "b" ? -1 : c === "x" ? 2 : 0), 0);
+    return { step: name[0], alter, octave: octaveOf(m - alter) };
+  }
+  // Notes more than two ledger lines out are written an octave (or two) closer, marked 8va / 8vb
+  function miniStaffPart(midis, up) {
+    let shift = 0;
+    if (midis.length) {
+      if (up) while (Math.max(...midis) - 12 * shift > 84) shift++;
+      else while (Math.min(...midis) + 12 * shift < 36) shift++;
+    }
+    return { shift, notes: midis.map(m => { const n = staffNote(m); return { ...n, octave: n.octave + (up ? -shift : shift) }; }) };
+  }
+  function miniXml(treble, bass) {
+    const ACC = { 1: "sharp", "-1": "flat", 2: "double-sharp", "-2": "flat-flat" };
+    const chord = (notes, staff) => notes.length
+      ? notes.map((n, i) => `<note>${i ? "<chord/>" : ""}<pitch><step>${n.step}</step>${n.alter ? `<alter>${n.alter}</alter>` : ""}<octave>${n.octave}</octave></pitch>` +
+          `<duration>4</duration><voice>${staff}</voice><type>whole</type>${ACC[n.alter] ? `<accidental>${ACC[n.alter]}</accidental>` : ""}<staff>${staff}</staff></note>`).join("")
+      : `<note print-object="no"><rest/><duration>4</duration><voice>${staff}</voice><type>whole</type><staff>${staff}</staff></note>`;
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1"><part-list><score-part id="P1"><part-name></part-name></score-part></part-list>
+<part id="P1"><measure number="1">
+<attributes><divisions>1</divisions><key><fifths>0</fifths></key><time print-object="no"><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves>
+<clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef></attributes>
+${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
+</measure></part></score-partwise>`;
+  }
+
+  // Only the latest state is drawn: changes that arrive while drawing are folded into one redraw
+  let miniOsmd = null, miniShown = null, miniBusy = false;
+  async function renderMiniStaff() {
+    if (miniEl.hidden || !miniEl.offsetParent || !window.opensheetmusicdisplay || miniBusy) return;
+    const [set, cls] = playingMidis.size ? [playingMidis, "playing"] : selected.size ? [selected, "on"] : [pressed, ""];
+    const midis = [...set].sort((a, b) => a - b);
+    const treble = miniStaffPart(midis.filter(m => m >= 60), true), bass = miniStaffPart(midis.filter(m => m < 60), false);
+    const xml = miniXml(treble.notes, bass.notes);
+    if (xml + cls === miniShown) return;
+    miniBusy = true;
+    try {
+      if (!miniOsmd) {
+        miniOsmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(miniEl, {
+          backend: "svg", autoResize: false, drawTitle: false, drawSubtitle: false, drawComposer: false, drawLyricist: false,
+          drawCredits: false, drawPartNames: false, drawMeasureNumbers: false, drawMetronomeMarks: false, drawTimeSignatures: false,
+        });
+      }
+      await miniOsmd.load(xml);
+      miniOsmd.zoom = MINI_ZOOM;
+      Object.assign(miniOsmd.EngravingRules, { StretchLastSystemLine: true, PageLeftMargin: 2.4, PageRightMargin: 1, StaffDistance: 4, BetweenStaffDistance: 4 });
+      miniOsmd.render();
+      // Keep the staff still: its height changes with ledger lines, so pin the top line in place
+      const top = miniOsmd.GraphicSheet.MeasureList[0][0].PositionAndShape.AbsolutePosition.y * 10 * MINI_ZOOM;
+      miniEl.querySelector("svg").style.marginTop = (MINI_TOP - top) + "px";
+      const mark = n => ["", "8", "15"][n] || "22";
+      if (treble.shift) miniEl.insertAdjacentHTML("beforeend", `<span class="ottava up">${mark(treble.shift)}<sup>${treble.shift > 1 ? "ma" : "va"}</sup></span>`);
+      if (bass.shift) miniEl.insertAdjacentHTML("beforeend", `<span class="ottava down">${mark(bass.shift)}<sup>${bass.shift > 1 ? "mb" : "vb"}</sup></span>`);
+      miniEl.className = "mini-staff" + (cls ? " " + cls : "");
+      miniShown = xml + cls;
+    } catch (e) {}
+    miniBusy = false;
+    renderMiniStaff(); // catch up if things changed meanwhile
+  }
+  miniEl.hidden = ui.miniStaff === false;
+  $("mini-staff-on").checked = !miniEl.hidden;
+  $("mini-staff-on").addEventListener("change", () => {
+    ui.miniStaff = $("mini-staff-on").checked;
+    saveUi();
+    miniEl.hidden = !ui.miniStaff;
+    layoutKeys(); // the piano gains or loses that width
+    renderMiniStaff();
+  });
+
   function renderKeys() {
     for (const [mStr, el] of Object.entries(keyEls)) {
       const m = +mStr;
@@ -1481,6 +1591,7 @@
     }
     $("overlay-bar").classList.toggle("show", !!overlay);
     $("overlay-label").textContent = overlay ? "Highlighted: " + overlay.label : "";
+    renderMiniStaff();
   }
 
   let lastInversions = null;
@@ -3379,27 +3490,38 @@
       const black = BLACK.has(midi % 12);
       if (black && !ui.sight.accidentals) continue;
       if (sight.target && midi === sight.target.midi) continue; // never the same note twice in a row
-      const alter = black ? (Math.random() < 0.5 ? 1 : -1) : 0;
-      const natural = midi - alter;
-      const step = NATURALS[natural % 12], octave = octaveOf(natural);
-      return { clef, midi, step, alter, octave, name: step + (alter > 0 ? "#" : alter < 0 ? "b" : "") + octave };
+      const n = sightSpell(midi, Math.random() < 0.5);
+      return { clef, midi, ...n, name: n.step + (n.alter > 0 ? "#" : n.alter < 0 ? "b" : "") + n.octave };
     }
   }
+  // How a key is written: white keys as they are, black keys as a flat or a sharp
+  function sightSpell(midi, flat) {
+    const alter = BLACK.has(midi % 12) ? (flat ? -1 : 1) : 0;
+    const natural = midi - alter;
+    return { step: NATURALS[natural % 12], alter, octave: octaveOf(natural) };
+  }
 
-  // One bar holding one note, drawn with the same engraver as the sheet music
-  function sightXml(n) {
+  // One bar holding the question note (and, after a wrong key, the note that was played),
+  // drawn with the same engraver as the sheet music
+  function sightXml(n, wrong) {
     const clef = n.clef === "treble" ? "<sign>G</sign><line>2</line>" : "<sign>F</sign><line>4</line>";
-    const acc = n.alter ? `<accidental>${n.alter > 0 ? "sharp" : "flat"}</accidental>` : "";
+    const note = n => `<note><pitch><step>${n.step}</step>${n.alter ? `<alter>${n.alter}</alter>` : ""}<octave>${n.octave}</octave></pitch><duration>1</duration><type>quarter</type>${
+      n.alter ? `<accidental>${n.alter > 0 ? "sharp" : "flat"}</accidental>` : ""}</note>`;
     return `<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="3.1"><part-list><score-part id="P1"><part-name></part-name></score-part></part-list>
 <part id="P1"><measure number="1">
-<attributes><divisions>1</divisions><key><fifths>0</fifths></key><time print-object="no"><beats>1</beats><beat-type>4</beat-type></time><clef>${clef}</clef></attributes>
-<note><pitch><step>${n.step}</step>${n.alter ? `<alter>${n.alter}</alter>` : ""}<octave>${n.octave}</octave></pitch><duration>1</duration><type>quarter</type>${acc}</note>
+<attributes><divisions>1</divisions><key><fifths>0</fifths></key><time print-object="no"><beats>${wrong ? 2 : 1}</beats><beat-type>4</beat-type></time><clef>${clef}</clef></attributes>
+${note(n)}${wrong ? note(wrong) : ""}
 </measure></part></score-partwise>`;
   }
 
-  let sightOsmd = null;
-  async function sightDraw(n) {
+  // Draws are queued: a redraw for a wrong key must not overlap the next question's draw.
+  // wrong: the wrongly played note, shown in red. cls: "miss" colours the question note red.
+  let sightOsmd = null, sightDrawing = Promise.resolve();
+  function sightDraw(n, wrong = null, cls = "") {
+    return sightDrawing = sightDrawing.catch(() => {}).then(() => sightRender(n, wrong, cls));
+  }
+  async function sightRender(n, wrong, cls) {
     if (!window.opensheetmusicdisplay) return;
     if (!sightOsmd) {
       sightOsmd = new opensheetmusicdisplay.OpenSheetMusicDisplay($("sight-staff"), {
@@ -3407,11 +3529,15 @@
         drawCredits: false, drawPartNames: false, drawMeasureNumbers: false, drawMetronomeMarks: false, drawTimeSignatures: false,
       });
     }
-    await sightOsmd.load(sightXml(n));
+    await sightOsmd.load(sightXml(n, wrong));
     sightOsmd.zoom = 2;
     // The one bar fills the box instead of hugging the note
     Object.assign(sightOsmd.EngravingRules, { StretchLastSystemLine: true, PageLeftMargin: 1.5, PageRightMargin: 1.5 });
     sightOsmd.render();
+    const staff = $("sight-staff");
+    if (wrong) staff.querySelectorAll(".vf-stavenote")[1]?.classList.add("wrong");
+    // Already answered while this was waiting to draw: keep the question note green
+    staff.className = "sight-staff" + (sight.solved === n ? " good" : cls ? " " + cls : "");
   }
 
   function sightStart() {
@@ -3461,10 +3587,21 @@
       sightMisses.add(m);
       keyEls[m]?.classList.add("bad");
       prompt.className = "ear-prompt bad";
-      prompt.textContent = `Not ${spellNote(m)}${octaveOf(m)}, try again`;
+      // Show the played note in red beside the question, spelled the same way (flat or sharp).
+      // Too far outside the clef to fit: the question note itself flashes red instead.
+      const target = sight.target, [lo, hi] = SIGHT_RANGES[target.clef].ledger;
+      const played = sightSpell(m, target.alter < 0);
+      prompt.textContent = `Not ${played.step}${played.alter > 0 ? "#" : played.alter < 0 ? "b" : ""}${played.octave}, try again`;
+      if (m >= lo && m <= hi) sightDraw(target, played);
+      else {
+        sightDraw(target, null, "miss");
+        sightLater(() => $("sight-staff").classList.remove("miss"), 400);
+      }
       return;
     }
     sight.awaiting = false;
+    sight.solved = sight.target;
+    $("sight-staff").classList.add("good");
     sight.answered++;
     if (!sight.missed) sight.correct++;
     sight.q.firstTry = !sight.missed;
@@ -3535,6 +3672,7 @@
     const [status, note, vel] = e.data;
     const cmd = status & 0xf0;
     if (cmd === 0x90 && vel > 0) {
+      staffPress(note);
       if (earActive()) {
         if ($("midi-sound").checked) playNotes([note], true);
         earInput(note);
