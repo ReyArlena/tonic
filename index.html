@@ -799,8 +799,6 @@
                     <option value="beat">beat</option>
                   </select>
                 </div>
-                <hr>
-                <div class="status">Uncompressed MusicXML only (.musicxml / .xml, not .mxl). In MuseScore: File, Export, MusicXML, uncompressed.</div>
               </div>
             </div>
           </div>
@@ -899,6 +897,17 @@
                 <input type="checkbox" id="keep-miss" checked><span class="ic" data-ic="push-pin"></span>
               </label>
             </div>
+
+            <div class="divider"></div>
+
+            <div class="pop right click">
+              <button class="icon-btn" data-tip="Advanced settings"><span class="ic" data-ic="gear-six"></span></button>
+              <div class="popover">
+                <div class="pop-body settings">
+                  <label class="switch-row"><span>Forgiving note order<small>Wait mode: a note from the very next step, up to a beat away, also counts if you play it a little early (hands not quite together). Off: notes must come in the written order. Turn this on if correct playing registers as wrong notes at fast speeds</small></span><input type="checkbox" id="forgiving" class="switch"></label>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -912,6 +921,7 @@
             <span class="ic" data-ic="plus-circle"></span>Add new file
           </button>
           <p class="lib-note"><span class="ic" data-ic="info"></span><span>Adding a file saves a copy of the sheet music in this browser. It isn't linked to the original file, so if you edit it elsewhere (e.g. MuseScore), add it again. Clearing this browser's site data removes the saved copies.</span></p>
+          <p class="lib-note"><span class="ic" data-ic="info"></span><span>Uncompressed MusicXML only (.musicxml / .xml, not .mxl). In MuseScore: File, Export, MusicXML, uncompressed.</span></p>
           <label class="lib-search"><span class="ic" data-ic="magnifying-glass"></span><input type="search" id="lib-search" placeholder="Search"></label>
           <div class="lib-msg" id="lib-msg"></div>
           <div class="lib-list" id="lib-list"></div>
@@ -2490,6 +2500,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     stepIdx = steps.findIndex(st => st.onset >= fromPos - 1e-6);
     if (stepIdx === -1) stepIdx = steps.length;
     hits = new Set();
+    early = new Set();
     setPlayState("pause");
     schedTimer = setInterval(schedule, 25);
     schedule();
@@ -2989,6 +3000,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   let steps = [];      // [{ onset, midis: [...] }] notes you have to play, grouped by onset
   let stepIdx = 0;
   let hits = new Set(); // notes of the current step already played
+  let early = new Set(); // notes of the next step played ahead of time (Forgiving note order)
   let holdAt = null;    // playhead position while waiting
   let stats = { correct: 0, wrong: 0 };
 
@@ -3027,6 +3039,16 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       if (step.midis.every(n => hits.has(n))) completeStep();
     } else if (wanted) {
       feedback(m, "good"); // repeated a note you already got
+    } else if (aheadOk(step, m)) {
+      // Forgiving note order: it belongs to the next step, so it's kept for when that step comes
+      if (!early.has(m)) {
+        const next = steps[stepIdx + 1];
+        early.add(m);
+        hitNotes.push({ pos: next.onset, midi: m });
+        paintHit(next.onset, m);
+        stats.correct++;
+      }
+      feedback(m, "good");
     } else if (holdAt !== null) {
       stats.wrong++;
       if (!missNotes.some(x => x.midi === m && x.pos === step.onset)) { missNotes.push({ pos: step.onset, midi: m }); drawMisses(); }
@@ -3035,9 +3057,18 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     updateStats();
   }
 
+  // While waiting on a step, a note of the very next step (up to a beat later) may come first
+  function aheadOk(step, m) {
+    const next = steps[stepIdx + 1];
+    return $("forgiving").checked && holdAt !== null && !!next && next.onset - step.onset <= 1 + 1e-6 && next.midis.includes(m);
+  }
+
   function completeStep() {
     stepIdx++;
-    hits = new Set();
+    hits = early;
+    early = new Set();
+    // The next step was played early in full: it's done too
+    if (hits.size && steps[stepIdx]?.midis.every(n => hits.has(n))) { stepIdx++; hits = new Set(); }
     if (!$("keep-miss").checked) { missNotes = []; drawMisses(); }
     if (holdAt !== null) {
       // Restart the clock from where it was waiting
@@ -3065,6 +3096,8 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // Nothing is re-engraved, so the music never moves.
   let hitNotes = [];  // [{ pos, midi }] notes played right
   let missNotes = []; // [{ pos, midi }] wrong keys: the whole trail with "Keep wrong notes" on, else the current step's
+  $("forgiving").checked = !!ui.forgiving;
+  $("forgiving").addEventListener("change", () => { ui.forgiving = $("forgiving").checked; saveUi(); });
   $("keep-miss").checked = ui.keepMiss !== false;
   $("keep-miss").addEventListener("change", () => {
     ui.keepMiss = $("keep-miss").checked;
