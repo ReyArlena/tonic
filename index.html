@@ -204,7 +204,7 @@
   .sheet-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sheet-key { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
   .sheet-toolbar .spacer { flex: 1; }
-  .score-wrap { min-height: 0; padding: 0 16px 12px; display: flex; }
+  .score-wrap { min-height: 0; padding: 0 16px 12px; display: flex; position: relative; }
   .sidebar { border-left: 1px solid var(--border); background: var(--panel); overflow: auto; min-height: 0; }
 
   /* My sheet music (library), shown at the top of the sidebar in place of its sections */
@@ -454,8 +454,6 @@
   .hand b { font-size: 0.75rem; }
   .toggle.hand input:not(:checked) ~ b { text-decoration: line-through; }
   /* Armed while waiting for a click on the score */
-  .icon-btn.armed { color: var(--play); border-color: var(--play); animation: armed 0.9s ease-in-out infinite alternate; }
-  @keyframes armed { from { box-shadow: 0 0 0 0 rgba(238, 138, 31, 0.45); } to { box-shadow: 0 0 0 5px rgba(238, 138, 31, 0); } }
 
   /* Settings switches */
   .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 6px 0; font-size: 0.9rem; cursor: pointer; }
@@ -505,10 +503,15 @@
   .chip-info .ic { width: 15px; height: 15px; }
   button.chip-info { border: 1px solid transparent; cursor: pointer; }
   button.chip-info:hover { border-color: var(--accent); color: var(--text); }
+  /* The start point chip is blue like its line on the score; it rests while a loop is on */
+  .chip-info.reset-start { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  button.chip-info.reset-start:hover { color: var(--accent); }
+  .chip-info.reset-start:disabled { opacity: 0.4; cursor: default; border-color: transparent; }
   .chip-info.stats { color: var(--text); font-weight: 600; }
   .chip-info.stats.empty { display: none; }
-  .loop-info { font-size: 0.85rem; color: var(--play); font-weight: 600; white-space: nowrap; margin-left: 4px; }
-  .loop-info:empty { display: none; }
+  /* The loop's range, orange like its box on the score */
+  .chip-info.loop-info { background: rgba(238, 138, 31, 0.18); color: var(--play); font-weight: 600; }
+  .chip-info.loop-info:empty { display: none; }
   .practice-hands { display: inline-flex; gap: 2px; }
   .practise-btn { color: var(--muted); }
   .practise-btn.active { background: var(--accent-soft); color: var(--accent); }
@@ -554,12 +557,35 @@
     background: #fff; border-radius: 14px; border: 1px solid var(--border); box-shadow: var(--shadow);
   }
   .score[hidden] { display: none; }
-  .loop-box { position: absolute; background: rgba(238, 138, 31, 0.16); border-radius: 4px; pointer-events: none; }
-  .start-mark { position: absolute; width: 3px; border-radius: 2px; background: var(--accent); pointer-events: none; }
+  /* Loop section: orange shade with a bar of one height along the top, named once where it starts */
+  .loop-box { position: absolute; background: rgba(238, 138, 31, 0.16); pointer-events: none; }
+  .loop-box::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 16px; background: #ee8a1f; }
+  /* Corners are rounded only where a run of boxes begins and ends on a line */
+  .loop-box.from { border-bottom-left-radius: 4px; }
+  .loop-box.to { border-bottom-right-radius: 4px; }
+  .loop-box.from::before { border-top-left-radius: 4px; }
+  .loop-box.to::before { border-top-right-radius: 4px; }
+  .loop-box span, .start-mark span {
+    position: absolute; bottom: 100%; font: 600 11px/16px system-ui, sans-serif; white-space: nowrap; color: #fff;
+  }
+  .loop-box span { left: 0; padding: 0 6px; display: flex; align-items: center; gap: 4px; }
+  .loop-box svg { width: 11px; height: 11px; }
+  .start-mark { position: absolute; width: 3px; border-radius: 0 0 2px 2px; background: var(--accent); pointer-events: none; }
+  .start-mark span { left: 50%; transform: translateX(-50%); background: var(--accent); padding: 0 6px; border-radius: 4px; }
+  /* What to click next while picking a loop, floating over the score */
+  .loop-pick {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5;
+    display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 14px; border-radius: 10px;
+    background: #ee8a1f; color: #fff; font-size: 0.88rem; font-weight: 600; white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  }
+  .loop-pick[hidden] { display: none; }
+  .loop-pick button { border: none; border-radius: 7px; padding: 4px 10px; background: rgba(255, 255, 255, 0.92); color: #7a3f00; font-weight: 600; cursor: pointer; }
+  .loop-pick button:hover { background: #fff; }
   /* Hover indicator: the note a click would land on */
-  .hover-mark { position: absolute; width: 2px; border-radius: 1px; pointer-events: none; background: rgba(238, 138, 31, 0.8); display: none; }
+  .hover-mark { position: absolute; z-index: 2; width: 2px; border-radius: 1px; pointer-events: none; background: rgba(238, 138, 31, 0.8); display: none; }
   .hover-mark span {
-    position: absolute; bottom: 100%; left: 50%; transform: translate(-50%, -2px);
+    position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
     font: 600 11px/1.3 system-ui, sans-serif; white-space: nowrap;
     background: #ee8a1f; color: #fff; padding: 1px 6px; border-radius: 4px;
   }
@@ -638,6 +664,8 @@
             <hr>
             <label class="switch-row"><span>Synth for MIDI<small>Play sound for MIDI input (off if your keyboard has speakers)</small></span><input type="checkbox" id="midi-sound" class="switch"></label>
             <div class="status" id="midi-status">MIDI not connected</div>
+            <label class="switch-row"><span>Reset from keyboard<small>In sheet music, press your lowest and highest key together to reset (and start again in Wait mode)</small></span><input type="checkbox" id="midi-reset" class="switch" checked></label>
+            <div class="field-row"><span>Reset keys<span class="hint" id="reset-keys-hint"></span></span><button class="chip" id="reset-keys-set">Set keys</button></div>
             <hr>
             <button class="danger-btn" id="reset-app">Reset app</button>
             <div class="status">Deletes all saved sheet music and settings, then reloads.</div>
@@ -774,6 +802,7 @@
             <span>Click to pick from My sheet music, or drop a MusicXML file here</span>
           </div>
           <div class="score" id="score" hidden></div>
+          <div class="loop-pick" id="loop-pick" hidden><span id="loop-pick-text"></span><button id="loop-cancel">Cancel</button></div>
         </div>
         <!-- Playback controls, shown once sheet music is loaded.
              The real inputs (ids used by the playback code) sit inside the styled controls. -->
@@ -781,8 +810,8 @@
           <div class="playbar-inner">
             <div class="group">
               <button id="xml-play" class="play-btn" data-tip="Play"><span class="ic" data-ic="play"></span></button>
-              <button id="xml-stop" class="icon-btn" data-tip="Stop and go back to the start point"><span class="ic" data-ic="stop"></span></button>
-              <button class="chip-info reset-start" id="reset-start" data-tip="Start point (click a note on the score or a chord chip to move it). Click to reset to the start">
+              <button id="xml-stop" class="icon-btn" data-tip="Reset: stop, go back to the start point (or the loop start) and clear the correct/wrong count"><span class="ic" data-ic="arrow-counter-clockwise"></span></button>
+              <button class="chip-info reset-start" id="reset-start" data-tip="Start point: the blue line on the score, where Play begins. Click a note to move it. Click here to send it back to the start of the song">
                 <span class="ic" data-ic="map-pin"></span><span id="play-from"></span>
               </button>
             </div>
@@ -820,13 +849,10 @@
             <div class="divider"></div>
 
             <div class="group">
-              <label class="icon-btn toggle" data-tip="Loop on/off. Repeats the loop section, or from the start point to the end if none is set">
+              <label class="icon-btn toggle" data-tip="Loop a section: turn on, then click its first and last note on the score. Turn off to clear it">
                 <input type="checkbox" id="loop"><span class="ic" data-ic="repeat"></span>
               </label>
-              <button id="loop-start" class="icon-btn" data-tip="Set loop start: click this, then a note on the score (or a chord chip)"><span class="ic" data-ic="flag"></span></button>
-              <button id="loop-end" class="icon-btn" data-tip="Set loop end: click this, then the last note to include"><span class="ic" data-ic="flag-checkered"></span></button>
-              <button id="loop-clear" class="icon-btn" data-tip="Clear the loop section" hidden><span class="ic" data-ic="x-circle"></span></button>
-              <span class="loop-info" id="loop-info"></span>
+              <span class="chip-info loop-info" id="loop-info"></span>
             </div>
 
             <div class="divider"></div>
@@ -2096,8 +2122,9 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       stopPlayback();
       playFrom = 0;
       playFromPos = 0;
-      loopFrom = loopTo = null;
+      loopFrom = loopTo = loopFirst = null;
       loopPick = null;
+      $("loop").checked = false;
       fileTempo = parsed.tempo || null;
       setTempo(fileTempo || 100);
       $("tempo-reset").dataset.tip = fileTempo
@@ -2274,8 +2301,8 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     totalLen = 0;
     songRange = null;
     checkPianoFit();
-    loopFrom = loopTo = null;
-    setPickMode(null);
+    $("loop").checked = false;
+    clearLoop();
     songKey = null;
     if (overlay && (overlay.songKey || overlay.midis)) setOverlay(null);
     $("score").innerHTML = "";
@@ -2578,10 +2605,16 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       selected.clear();
       render();
       resetStats();
-      startPlayback(loopFrom !== null && $("loop").checked ? loopFrom : playFromPos);
+      startPlayback(startPos());
     }
   });
-  $("xml-stop").addEventListener("click", stopPlayback);
+  // Reset: stop, put the playhead back at the start and clear the Wait mode score
+  function resetPlayback() {
+    stopPlayback();
+    resetStats();
+    moveCursor(startPos());
+  }
+  $("xml-stop").addEventListener("click", resetPlayback);
   $("reset-start").addEventListener("click", () => {
     if (!xmlMeasures.length) return;
     playFrom = 0;
@@ -2597,6 +2630,15 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // pos (quarter notes) is an exact note position from a score click; chips use the measure start
   function handleMeasureClick(idx, pos = null) {
     if (loopPick) { pickLoop(idx, pos); return; }
+    // With a loop on, the start point rests: a click inside the loop just jumps the playhead there
+    const range = loopRange();
+    if (range) {
+      const at = pos ?? xmlMeasures[idx].start;
+      if (at < range.from - 1e-6 || at >= range.to - 1e-6) return;
+      if (playing) { haltAudio(); startAt(at); }
+      else { pausedAt = at; moveCursor(at); setPlayState("resume"); }
+      return;
+    }
     playFrom = idx;
     playFromPos = pos ?? xmlMeasures[idx].start;
     updatePlayFrom();
@@ -2610,17 +2652,20 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   });
 
   // ---------- Loop section ----------
+  // Turning Loop on asks for two clicks: the first and the last note. Turning it off clears the section.
   // Score clicks loop from/to an exact note; chord chips use whole measures
   let loopFrom = null, loopTo = null; // quarter-note positions, end exclusive
-  let loopPick = null;                // null | "start" | "end"
+  let loopPick = null;                // null | "start" | "end": the click being waited for
+  let loopFirst = null;               // the first picked point, while waiting for the second
   let loopEndLabel = "";
 
-  // Section that playback repeats: the picked loop, or from the start point to the end
+  // Section that playback repeats, once both ends are picked
   function loopRange() {
-    if (!$("loop").checked || !xmlMeasures.length) return null;
-    if (loopFrom !== null) return { from: loopFrom, to: loopTo };
-    return { from: playFromPos, to: totalLen };
+    if (!$("loop").checked || loopFrom === null || loopTo === null || !xmlMeasures.length) return null;
+    return { from: loopFrom, to: loopTo };
   }
+  // Where Play and Reset start from: the loop start, else the start point (blue line)
+  const startPos = () => loopRange()?.from ?? playFromPos;
 
   // A clicked point covers one note (score) or a whole measure (chip)
   function pickPoint(idx, pos) {
@@ -2649,45 +2694,39 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
 
   function setPickMode(mode) {
     loopPick = mode;
-    $("loop-start").classList.toggle("armed", mode === "start");
-    $("loop-end").classList.toggle("armed", mode === "end");
     $("view-sheet").classList.toggle("picking", !!mode);
     $("score").classList.toggle("picking", !!mode);
     updateLoopMarks();
   }
 
-  // Start pick: the loop starts at that note and the end button arms next (Esc keeps the song end).
-  // End pick: the loop runs through that note. A bound that no longer fits is reset.
+  // First click: where the loop starts. Second click: the last note in it (either order works).
   function pickLoop(idx, pos = null) {
     const p = pickPoint(idx, pos);
-    const endLabel = q => q.whole ? `end of m${xmlMeasures[q.idx].number}` : fmtPos(q.start);
-    const wasStart = loopPick === "start";
-    if (wasStart) {
-      loopFrom = p.start;
-      if (loopTo === null || loopTo <= loopFrom + 1e-6) { loopTo = totalLen; loopEndLabel = "the end"; }
-    } else {
-      loopTo = p.end;
-      loopEndLabel = endLabel(p);
-      if (loopFrom === null || loopFrom >= loopTo - 1e-6) loopFrom = playFromPos < p.start + 1e-6 ? playFromPos : 0;
+    if (loopPick === "start") {
+      loopFirst = p;
+      setPickMode("end");
+      return;
     }
-    $("loop").checked = true;
-    setPickMode(wasStart ? "end" : null);
+    const [a, b] = p.start < loopFirst.start ? [p, loopFirst] : [loopFirst, p];
+    loopFrom = a.start;
+    loopTo = b.end;
+    loopEndLabel = b.whole ? `end of m${xmlMeasures[b.idx].number}` : fmtPos(b.start);
+    loopFirst = null;
+    setPickMode(null);
     if (playing) { haltAudio(); startAt(loopFrom); }
-    else { playFrom = measureAt(loopFrom); playFromPos = loopFrom; updatePlayFrom(); pausedAt = null; setPlayState("play"); }
+    else { pausedAt = null; moveCursor(loopFrom); setPlayState("play"); }
   }
 
   function clearLoop() {
-    loopFrom = loopTo = null;
+    loopFrom = loopTo = loopFirst = null;
     setPickMode(null);
   }
 
   function updateLoopMarks() {
-    const info = $("loop-info");
-    $("loop-clear").hidden = loopFrom === null;
-    info.textContent = loopPick === "start" ? "Click the loop start note"
-      : loopPick === "end" ? "Click the last note to loop (Esc to skip)"
-      : loopFrom !== null ? `${fmtPos(loopFrom)} to ${loopEndLabel}${$("loop").checked ? "" : " (loop off)"}`
-      : "";
+    $("loop-pick").hidden = !loopPick;
+    $("loop-pick-text").textContent = loopPick === "start" ? "Loop: click the first note" : "Loop: click the last note";
+    $("loop-info").textContent = loopRange() ? `${fmtPos(loopFrom)} to ${loopEndLabel}` : "";
+    $("reset-start").disabled = $("loop").checked;
     document.querySelectorAll(".measure").forEach(x => {
       const m = xmlMeasures[+x.dataset.measure];
       x.classList.toggle("inloop", loopFrom !== null && m.start < loopTo - 1e-6 && m.start + m.length > loopFrom + 1e-6);
@@ -2695,15 +2734,20 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     drawScoreMarks();
   }
 
-  // Clicking an armed button again cancels picking
-  ["start", "end"].forEach(which => $("loop-" + which).addEventListener("click", () => {
-    if (!xmlMeasures.length) return;
-    setPickMode(loopPick === which ? null : which);
-  }));
-  $("loop-clear").addEventListener("click", clearLoop);
-  $("loop").addEventListener("change", updateLoopMarks);
+  // Loop on: pick its two ends. Loop off (or Cancel / Esc while picking): the section is cleared.
+  $("loop").addEventListener("change", () => {
+    if ($("loop").checked && !xmlMeasures.length) $("loop").checked = false;
+    clearLoop();
+    if ($("loop").checked) setPickMode("start");
+    else if (!playing) { pausedAt = null; moveCursor(playFromPos); setPlayState("play"); }
+  });
+  function cancelLoopPick() {
+    $("loop").checked = false;
+    clearLoop();
+  }
+  $("loop-cancel").addEventListener("click", cancelLoopPick);
   window.addEventListener("keydown", e => {
-    if (e.key === "Escape" && loopPick) setPickMode(null);
+    if (e.key === "Escape" && loopPick) cancelLoopPick();
   });
 
 
@@ -2730,7 +2774,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     scoreWidth = el.clientWidth;
     indexCursor();
     moveCursor(playFromPos);
-    setPickMode(null);
+    setPickMode(loopPick);
   }
 
   // Walk the cursor once through the piece to record when each step happens
@@ -2842,6 +2886,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       d.className = cls;
       Object.assign(d.style, { left: b.x + "px", top: b.y + "px", width: b.w + "px", height: b.h + "px" }, style);
       box.appendChild(d);
+      return d;
     };
     // Shade [from, to) measure by measure, cutting at note columns inside a measure
     const xAt = (i, pos) => {
@@ -2859,13 +2904,24 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       const l = xAt(i, Math.max(from, m.start)), r = xAt(i, Math.min(to, m.start + m.length));
       add(cls, { ...boxes[i], x: l, w: Math.max(4, r - l) });
     });
+    // The loop, or just its first note while the last one is still to be picked
     if (loopFrom !== null) shade(loopFrom, loopTo, "loop-box");
-    const sb = boxes[playFrom];
+    else if (loopFirst) shade(loopFirst.start, loopFirst.end, "loop-box");
+    const loopBoxes = [...box.querySelectorAll(".loop-box")];
+    if (loopBoxes.length) loopBoxes[0].innerHTML = `<span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor">${ICONS.repeat}</svg>Loop</span>`;
+    const joined = (a, b) => a && b && a.style.top === b.style.top
+      && Math.abs(parseFloat(a.style.left) + parseFloat(a.style.width) - parseFloat(b.style.left)) < 3;
+    loopBoxes.forEach((d, i) => {
+      d.classList.toggle("from", !joined(loopBoxes[i - 1], d));
+      d.classList.toggle("to", !joined(d, loopBoxes[i + 1]));
+    });
+    // The start point rests while a loop is on
+    const sb = !$("loop").checked && boxes[playFrom];
     if (sb) {
       // Put the start line at the exact note when the start isn't the measure's first beat
       const rel = playFromPos - xmlMeasures[playFrom].start;
       const col = noteColumns(playFrom).find(c => Math.abs(c.rel - rel) < 1e-4);
-      add("start-mark", { ...sb, x: col && rel > 1e-4 ? col.x - 6 : sb.x }, { width: "3px" });
+      add("start-mark", { ...sb, x: col && rel > 1e-4 ? col.x - 6 : sb.x }, { width: "3px" }).innerHTML = "<span>Start</span>";
     }
   }
 
@@ -2901,7 +2957,8 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       }
       if (!hit || !hit.col) { hoverEl.style.display = "none"; return; }
       Object.assign(hoverEl.style, {
-        display: "block", left: (hit.col.x - 6) + "px", top: hit.box.y + "px", height: hit.box.h + "px",
+        // Starts above the system so its label clears the loop bar and the Start label
+        display: "block", left: (hit.col.x - 6) + "px", top: (hit.box.y - 18) + "px", height: (hit.box.h + 18) + "px",
       });
       hoverEl.firstChild.textContent = fmtPos(hit.pos);
     });
@@ -2994,7 +3051,13 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
 
   // Wait mode starts with both hands' sound off, so nothing plays unless you turn it on;
   // leaving it turns both back on
-  $("wait").addEventListener("change", () => { $("lh").checked = $("rh").checked = !$("wait").checked; });
+  $("wait").addEventListener("change", () => {
+    $("lh").checked = $("rh").checked = !$("wait").checked;
+    // Wait mode only does anything while playing, so turning it on starts (or resumes) playback;
+    // turning it off pauses, rather than letting the song run on with full sound
+    if ($("wait").checked && !playing) $("xml-play").click();
+    else if (!$("wait").checked) pausePlayback();
+  });
 
   // Changing practice settings mid-song picks up from the current spot
   ["wait", "practice-hand"].forEach(id => $(id).addEventListener("change", () => {
@@ -3723,10 +3786,41 @@ ${note(n)}${wrong ? note(wrong) : ""}
 
   // ---------- MIDI input ----------
   const held = new Set();
+  // Reset from the keyboard: the lowest and highest key held together act as the Reset button.
+  // The keys are learned ("Set keys"), since a MIDI keyboard doesn't report its size; 88 keys by default.
+  const down = new Set(); // every MIDI key held right now
+  let learnKeys = null;   // keys pressed so far while learning the reset keys
+  $("midi-reset").checked = ui.midiReset !== false;
+  $("midi-reset").addEventListener("change", () => { ui.midiReset = $("midi-reset").checked; saveUi(); });
+  const resetKeys = () => ui.resetKeys || PIANO_RANGES["88"];
+  function syncResetKeys() {
+    const name = m => spellNote(m) + octaveOf(m);
+    $("reset-keys-hint").textContent = !learnKeys ? resetKeys().map(name).join(" and ")
+      : learnKeys.length ? "Now press your highest key" : "Press your lowest key";
+    $("reset-keys-set").textContent = learnKeys ? "Cancel" : "Set keys";
+  }
+  $("reset-keys-set").addEventListener("click", () => { learnKeys = learnKeys ? null : []; syncResetKeys(); });
+  syncResetKeys();
+  // True when this key press was used up, as a learned key or as the reset itself
+  function midiReset(note) {
+    if (learnKeys) {
+      if (!learnKeys.includes(note)) learnKeys.push(note);
+      if (learnKeys.length === 2) { ui.resetKeys = learnKeys.sort((a, b) => a - b); saveUi(); learnKeys = null; }
+      syncResetKeys();
+      return true;
+    }
+    const keys = resetKeys();
+    if (!$("midi-reset").checked || ui.view !== "sheet" || !timeline.length || !keys.includes(note) || !keys.every(k => down.has(k))) return false;
+    resetPlayback();
+    if ($("wait").checked) $("xml-play").click(); // Wait mode starts again straight away
+    return true;
+  }
   function onMidiMessage(e) {
     const [status, note, vel] = e.data;
     const cmd = status & 0xf0;
     if (cmd === 0x90 && vel > 0) {
+      down.add(note);
+      if (midiReset(note)) return;
       staffPress(note);
       offscreenArrow(note);
       if (earActive()) {
@@ -3751,6 +3845,7 @@ ${note(n)}${wrong ? note(wrong) : ""}
       if ($("midi-sound").checked) playNotes([note], true);
       render();
     } else if (cmd === 0x80 || (cmd === 0x90 && vel === 0)) {
+      down.delete(note);
       held.delete(note);
     }
   }
