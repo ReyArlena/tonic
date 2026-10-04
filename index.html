@@ -1119,6 +1119,7 @@
 
 <script src="tonal.min.js"></script>
 <script src="piano-samples.js"></script>
+<script src="default-sheet.js"></script>
 <script src="opensheetmusicdisplay.min.js"></script>
 <script>
   const { Chord, Scale, Note } = Tonal;
@@ -2235,7 +2236,19 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     });
   }
   function sheetDb() {
-    return dbPromise ||= openDb(DB_NAME);
+    return dbPromise ||= openDb(DB_NAME).then(async db => {
+      // Add the bundled sheet (default-sheet.js), once, so deleting it sticks
+      try {
+        const def = window.DEFAULT_SHEET;
+        if (def && !ui.defaultSheetAdded) {
+          const now = new Date().toISOString();
+          await idbReq(db.transaction("sheets", "readwrite").objectStore("sheets").add({ name: def.name, added: now, opened: now, text: def.text }));
+          ui.defaultSheetAdded = true;
+          saveUi();
+        }
+      } catch (e) {}
+      return db;
+    });
   }
   const idbReq = r => new Promise((resolve, reject) => { r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
   const sheetStore = async mode => (await sheetDb()).transaction("sheets", mode).objectStore("sheets");
