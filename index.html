@@ -3784,7 +3784,7 @@ ${note(n)}${wrong ? note(wrong) : ""}
     if (inputs.length) fitPiano(...PIANO_RANGES["88"]);
     setMidiStatus(inputs.length ? "Connected: " + inputs.map(i => i.name).join(", ") : "No MIDI device found. Plug one in.", inputs.length > 0);
   }
-  $("midi").addEventListener("click", async () => {
+  async function connectMidi() {
     if (!navigator.requestMIDIAccess) {
       setMidiStatus("This browser has no Web MIDI support (use Chrome or Edge).", false);
       return;
@@ -3796,7 +3796,10 @@ ${note(n)}${wrong ? note(wrong) : ""}
     } catch (err) {
       setMidiStatus("MIDI access denied.", false);
     }
-  });
+  }
+  $("midi").addEventListener("click", connectMidi);
+  // Reconnect on load when the browser already has permission (never prompts by itself)
+  navigator.permissions?.query({ name: "midi" }).then(p => { if (p.state === "granted") connectMidi(); }).catch(() => {});
 
   // ---------- Controls ----------
   $("clear").addEventListener("click", () => { selected.clear(); render(); });
