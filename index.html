@@ -303,6 +303,10 @@
 
   /* Test progress (ear training and sight reading) */
   .view-ear, .view-sight { gap: 12px; grid-auto-rows: max-content; }
+  /* Desktop: the test and its progress side by side; stacked when there's no room for both */
+  @media (min-width: 1000px) {
+    .view-ear, .view-sight { grid-template-columns: repeat(2, minmax(0, 620px)); justify-content: center; }
+  }
   .ear-progress-pane .pane-head { flex-wrap: wrap; }
   .ear-progress-pane .tabs .tab { padding: 4px 10px; font-size: 0.8rem; }
   .res-summary { display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; }
