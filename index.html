@@ -146,7 +146,7 @@
   }
   .mini-staff[hidden] { display: none; }
   .mini-staff svg { display: block; }
-  .mini-staff.on .vf-stavenote path { fill: var(--key-on); stroke: var(--key-on); }
+  .mini-staff.on .vf-stavenote path, .mini-staff.mix .vf-notehead.sel path { fill: var(--key-on); stroke: var(--key-on); }
   .mini-staff.playing .vf-stavenote path { fill: var(--play); stroke: var(--play); }
   .mini-staff .ottava { position: absolute; right: 7px; font: italic 600 0.68rem Georgia, serif; color: #555; }
   .mini-staff .ottava.up { top: 4px; }
@@ -1617,6 +1617,14 @@
     pressedTimer = setTimeout(() => { pressed = new Set(); renderMiniStaff(); }, 1500);
     renderMiniStaff();
   }
+  // MIDI: the keys held at the latest press. Keys let go stay shown (so a chord stays whole)
+  // until the next press, or a moment after the last key is released
+  function staffHeld(notes, isPress) {
+    clearTimeout(pressedTimer);
+    if (isPress) pressed = new Set(notes);
+    if (!notes.size) pressedTimer = setTimeout(() => { pressed = new Set(); renderMiniStaff(); }, 1500);
+    if (isPress) renderMiniStaff();
+  }
 
   // How a key is written on the staff, following the key labels: { step, alter, octave }
   function staffNote(m) {
@@ -1652,11 +1660,15 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   let miniOsmd = null, miniShown = null, miniBusy = false;
   async function renderMiniStaff() {
     if (miniEl.hidden || !miniEl.offsetParent || !window.opensheetmusicdisplay || miniBusy) return;
-    const [set, cls] = playingMidis.size ? [playingMidis, "playing"] : selected.size ? [selected, "on"] : [pressed, ""];
+    // Pressed keys are drawn with the selection, in black beside its blue ("mix"): a pressed key
+    // that's part of the selection turns black too, so you can see it register
+    const [set, cls] = playingMidis.size ? [playingMidis, "playing"]
+      : selected.size ? [new Set([...selected, ...pressed]), pressed.size ? "mix" : "on"] : [pressed, ""];
     const midis = [...set].sort((a, b) => a - b);
     const treble = miniStaffPart(midis.filter(m => m >= 60), true), bass = miniStaffPart(midis.filter(m => m < 60), false);
     const xml = miniXml(treble.notes, bass.notes);
-    if (xml + cls === miniShown) return;
+    const state = xml + cls + (cls === "mix" ? [...pressed].sort() : "");
+    if (state === miniShown) return;
     miniBusy = true;
     try {
       if (!miniOsmd) {
@@ -1676,7 +1688,15 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       if (treble.shift) miniEl.insertAdjacentHTML("beforeend", `<span class="ottava up">${mark(treble.shift)}<sup>${treble.shift > 1 ? "ma" : "va"}</sup></span>`);
       if (bass.shift) miniEl.insertAdjacentHTML("beforeend", `<span class="ottava down">${mark(bass.shift)}<sup>${bass.shift > 1 ? "mb" : "vb"}</sup></span>`);
       miniEl.className = "mini-staff" + (cls ? " " + cls : "");
-      miniShown = xml + cls;
+      if (cls === "mix") {
+        // A staff's notes are one chord, its noteheads running from the lowest note up
+        [midis.filter(m => m >= 60), midis.filter(m => m < 60)].forEach((part, staff) => {
+          const g = miniOsmd.GraphicSheet.MeasureList[0][staff]?.staffEntries[0]?.graphicalVoiceEntries[0]?.notes[0]?.getSVGGElement?.();
+          const heads = g ? g.querySelectorAll(".vf-notehead") : [];
+          if (heads.length === part.length) part.forEach((m, i) => heads[i].classList.toggle("sel", !pressed.has(m)));
+        });
+      }
+      miniShown = state;
     } catch (e) {}
     miniBusy = false;
     renderMiniStaff(); // catch up if things changed meanwhile
@@ -1739,7 +1759,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   function renderResult() {
     const midis = [...selected].sort((a, b) => a - b);
     if (!midis.length) {
-      resultEl.innerHTML = '<div class="empty">No notes selected. Click keys on the piano, play a MIDI keyboard, or pick a chord, scale or key.</div>';
+      resultEl.innerHTML = '<div class="empty">No notes selected. Turn on Select, then click keys on the piano or play a MIDI keyboard. Or pick a chord, scale or key.</div>';
       return;
     }
 
@@ -3976,7 +3996,6 @@ ${note(n)}${wrong ? note(wrong) : ""}
   syncSightSettings();
 
   // ---------- MIDI input ----------
-  const held = new Set();
   // Reset from the keyboard: the lowest and highest key held together act as the Reset button.
   // The keys are learned ("Set keys"), since a MIDI keyboard doesn't report its size; 88 keys by default.
   const down = new Set(); // every MIDI key held right now
@@ -4011,7 +4030,8 @@ ${note(n)}${wrong ? note(wrong) : ""}
     if (cmd === 0x90 && vel > 0) {
       down.add(note);
       if (midiReset(note)) return;
-      staffPress(note);
+      staffHeld(down, true);
+      keyEls[note]?.classList.add("pressed"); // dipped for as long as it's held
       offscreenArrow(note);
       if (earActive()) {
         if ($("midi-sound").checked) playNotes([note], true);
@@ -4028,15 +4048,17 @@ ${note(n)}${wrong ? note(wrong) : ""}
         practiceInput(note);
         return;
       }
-      // A new chord starts when you press a key with nothing held down
-      if (!held.size) selected.clear();
-      held.add(note);
-      selected.add(note);
       if ($("midi-sound").checked) playNotes([note], true);
+      // Like clicking: keys only join the selection with "Select" on
+      if (!$("select-mode").checked) return;
+      // A new chord starts when you press a key with nothing else held down
+      if (down.size === 1) selected.clear();
+      selected.add(note);
       render();
     } else if (cmd === 0x80 || (cmd === 0x90 && vel === 0)) {
       down.delete(note);
-      held.delete(note);
+      keyEls[note]?.classList.remove("pressed");
+      staffHeld(down, false);
     }
   }
   function setMidiStatus(text, connected) {
