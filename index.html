@@ -2641,6 +2641,11 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     moveCursor(startPos());
   }
   $("xml-stop").addEventListener("click", resetPlayback);
+  // Reset, then in Wait mode start again straight away (it stops at the first note anyway)
+  function resetAndGo() {
+    resetPlayback();
+    if ($("wait").checked) $("xml-play").click();
+  }
   $("reset-start").addEventListener("click", () => {
     if (!xmlMeasures.length) return;
     playFrom = 0;
@@ -2739,8 +2744,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     loopEndLabel = b.whole ? `end of m${xmlMeasures[b.idx].number}` : fmtPos(b.start);
     loopFirst = null;
     setPickMode(null);
-    if (playing) { haltAudio(); startAt(loopFrom); }
-    else { pausedAt = null; moveCursor(loopFrom); setPlayState("play"); }
+    resetAndGo(); // a new section is a new exercise: back to its start, count and trail cleared
   }
 
   function clearLoop() {
@@ -2763,9 +2767,10 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // Loop on: pick its two ends. Loop off (or Cancel / Esc while picking): the section is cleared.
   $("loop").addEventListener("change", () => {
     if ($("loop").checked && !xmlMeasures.length) $("loop").checked = false;
+    const had = loopFrom !== null && loopTo !== null;
     clearLoop();
     if ($("loop").checked) setPickMode("start");
-    else if (!playing) { pausedAt = null; moveCursor(playFromPos); setPlayState("play"); }
+    else if (had) resetAndGo(); // the section is gone: back to the start point, count and trail cleared
   });
   function cancelLoopPick() {
     $("loop").checked = false;
@@ -3966,8 +3971,7 @@ ${note(n)}${wrong ? note(wrong) : ""}
     }
     const keys = resetKeys();
     if (!$("midi-reset").checked || ui.view !== "sheet" || !timeline.length || !keys.includes(note) || !keys.every(k => down.has(k))) return false;
-    resetPlayback();
-    if ($("wait").checked) $("xml-play").click(); // Wait mode starts again straight away
+    resetAndGo();
     return true;
   }
   function onMidiMessage(e) {
