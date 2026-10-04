@@ -147,7 +147,9 @@
   .mini-staff[hidden] { display: none; }
   .mini-staff svg { display: block; }
   .mini-staff.on .vf-stavenote path, .mini-staff.mix .vf-notehead.sel path { fill: var(--key-on); stroke: var(--key-on); }
-  .mini-staff.playing .vf-stavenote path { fill: var(--play); stroke: var(--play); }
+  .mini-staff.playing .vf-stavenote path, .mini-staff.mix .vf-notehead.play path { fill: var(--play); stroke: var(--play); }
+  .mini-staff.mix .vf-notehead.good path { fill: #2e9e6a; stroke: #2e9e6a; }
+  .mini-staff.mix .vf-notehead.bad path { fill: #d64545; stroke: #d64545; }
   .mini-staff .ottava { position: absolute; right: 7px; font: italic 600 0.68rem Georgia, serif; color: #555; }
   .mini-staff .ottava.up { top: 4px; }
   .mini-staff .ottava.down { bottom: 4px; }
@@ -1611,19 +1613,21 @@
   const miniEl = $("mini-staff");
   const MINI_ZOOM = 0.75, MINI_TOP = 30; // px from the top of the box to the top staff line
   let pressed = new Set(), pressedTimer = null;
+  const judged = new Map(); // Wait mode: pressed key -> "good" | "bad", shown green / red on the staff
   function staffPress(m) {
     pressed = new Set([m]);
+    judged.clear();
     clearTimeout(pressedTimer);
     pressedTimer = setTimeout(() => { pressed = new Set(); renderMiniStaff(); }, 1500);
     renderMiniStaff();
   }
   // MIDI: the keys held at the latest press. Keys let go stay shown (so a chord stays whole)
   // until the next press, or a moment after the last key is released
-  function staffHeld(notes, isPress) {
+  function staffHeld(notes, press = null) {
     clearTimeout(pressedTimer);
-    if (isPress) pressed = new Set(notes);
+    if (press !== null) { pressed = new Set(notes); judged.delete(press); }
     if (!notes.size) pressedTimer = setTimeout(() => { pressed = new Set(); renderMiniStaff(); }, 1500);
-    if (isPress) renderMiniStaff();
+    if (press !== null) renderMiniStaff();
   }
 
   // How a key is written on the staff, following the key labels: { step, alter, octave }
@@ -1660,14 +1664,19 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   let miniOsmd = null, miniShown = null, miniBusy = false;
   async function renderMiniStaff() {
     if (miniEl.hidden || !miniEl.offsetParent || !window.opensheetmusicdisplay || miniBusy) return;
-    // Pressed keys are drawn with the selection, in black beside its blue ("mix"): a pressed key
-    // that's part of the selection turns black too, so you can see it register
-    const [set, cls] = playingMidis.size ? [playingMidis, "playing"]
-      : selected.size ? [new Set([...selected, ...pressed]), pressed.size ? "mix" : "on"] : [pressed, ""];
+    // Pressed keys are drawn with the selection, or in Wait mode with the notes playing. Each note
+    // gets a tone: green / red for a Wait mode answer, black for any other press (also when it's
+    // part of the selection, so you can see it register), else orange (playing) or blue (selected)
+    const sounding = playingMidis.size > 0, withPressed = !sounding || $("wait").checked;
+    const set = new Set([...(sounding ? playingMidis : selected), ...(withPressed ? pressed : [])]);
     const midis = [...set].sort((a, b) => a - b);
+    const tone = m => withPressed && pressed.has(m) ? judged.get(m) || "" : sounding ? "play" : "sel";
+    const tones = midis.map(tone);
+    // One tone throughout colours the whole staff; otherwise each notehead is coloured ("mix")
+    const cls = tones.some(t => t !== tones[0]) || ["good", "bad"].includes(tones[0]) ? "mix" : { play: "playing", sel: "on" }[tones[0]] || "";
     const treble = miniStaffPart(midis.filter(m => m >= 60), true), bass = miniStaffPart(midis.filter(m => m < 60), false);
     const xml = miniXml(treble.notes, bass.notes);
-    const state = xml + cls + (cls === "mix" ? [...pressed].sort() : "");
+    const state = xml + cls + (cls === "mix" ? tones : "");
     if (state === miniShown) return;
     miniBusy = true;
     try {
@@ -1693,7 +1702,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
         [midis.filter(m => m >= 60), midis.filter(m => m < 60)].forEach((part, staff) => {
           const g = miniOsmd.GraphicSheet.MeasureList[0][staff]?.staffEntries[0]?.graphicalVoiceEntries[0]?.notes[0]?.getSVGGElement?.();
           const heads = g ? g.querySelectorAll(".vf-notehead") : [];
-          if (heads.length === part.length) part.forEach((m, i) => heads[i].classList.toggle("sel", !pressed.has(m)));
+          if (heads.length === part.length) part.forEach((m, i) => { if (tone(m)) heads[i].classList.add(tone(m)); });
         });
       }
       miniShown = state;
@@ -3127,6 +3136,8 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   }
 
   function feedback(m, cls) {
+    judged.set(m, cls);
+    renderMiniStaff();
     const el = keyEls[m];
     if (!el) return;
     el.classList.remove("good", "bad");
@@ -4030,7 +4041,7 @@ ${note(n)}${wrong ? note(wrong) : ""}
     if (cmd === 0x90 && vel > 0) {
       down.add(note);
       if (midiReset(note)) return;
-      staffHeld(down, true);
+      staffHeld(down, note);
       keyEls[note]?.classList.add("pressed"); // dipped for as long as it's held
       offscreenArrow(note);
       if (earActive()) {
@@ -4058,7 +4069,7 @@ ${note(n)}${wrong ? note(wrong) : ""}
     } else if (cmd === 0x80 || (cmd === 0x90 && vel === 0)) {
       down.delete(note);
       keyEls[note]?.classList.remove("pressed");
-      staffHeld(down, false);
+      staffHeld(down);
     }
   }
   function setMidiStatus(text, connected) {
