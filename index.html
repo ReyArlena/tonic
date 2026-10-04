@@ -99,6 +99,8 @@
   .overlay-bar .icon-btn .ic { width: 14px; height: 14px; }
 
   .kb-row { display: flex; align-items: center; gap: 12px; }
+  .kb-msg { margin-top: 6px; font-size: 0.82rem; color: #d64545; text-align: center; }
+  .kb-msg[hidden] { display: none; }
   .piano-wrap { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; }
   /* Mini staff: the notes being played, on white paper like the score */
   .mini-staff {
@@ -491,7 +493,7 @@
   .practice-hands { display: inline-flex; gap: 2px; }
   .practise-btn { color: var(--muted); }
   .practise-btn.active { background: var(--accent-soft); color: var(--accent); }
-  .practice.wait-off .practice-hands, .practice.wait-off .octave { opacity: 0.45; }
+  .practice.wait-off .practice-hands { opacity: 0.45; }
   /* A hand you are practising is never auto-played, so its sound button is locked */
   .toggle.locked { opacity: 0.35; cursor: not-allowed; }
   .toggle.locked input:checked ~ .bg { background: transparent; }
@@ -658,6 +660,7 @@
       <div class="piano-wrap" id="piano-wrap"><div class="piano" id="piano"></div></div>
       <div class="mini-staff" id="mini-staff" data-tip="The notes being played, on the staff"></div>
     </div>
+    <div class="kb-msg" id="kb-msg" hidden>Your current task needs more keys than are currently visible. You can change the piano size in settings.</div>
   </section>
 
   <main class="views-area">
@@ -829,9 +832,6 @@
                 <option value="R">right</option>
                 <option value="L">left</option>
               </select>
-              <label class="icon-btn toggle octave" data-tip="Any octave: accept the right note in any octave. Off: the exact written note only">
-                <input type="checkbox" id="any-octave"><span class="ic" data-ic="arrows-vertical"></span>
-              </label>
               <span class="chip-info stats empty" data-tip="Wait mode score: correct and wrong notes since you pressed Play">
                 <span class="ic" data-ic="target"></span><span id="practice-stats"></span>
               </span>
@@ -889,7 +889,6 @@
                     <option value="cadence">Cadence (C F G C)</option>
                   </select>
                 </div>
-                <label class="switch-row"><span>Any octave counts<small>The right note in any octave is correct</small></span><input type="checkbox" id="ear-anyoct" class="switch" checked></label>
                 <label class="switch-row"><span>White keys only<small>Leave out sharps and flats</small></span><input type="checkbox" id="ear-white" class="switch" checked></label>
               </div>
             </div>
@@ -1066,6 +1065,7 @@
     "6": [24, 96], "7": [24, 108], "88": [21, 108],
   };
   let LOW = 36, HIGH = 84; // C2 to C6 by default
+  let songRange = null;    // [lowest, highest] note of the open sheet
 
   const CHORD_TYPES = [
     { id: "M",      suf: "",       name: "major",               iv: [0,4,7] },
@@ -1197,6 +1197,30 @@
     if (wi * whiteW > wrap.clientWidth) wrap.scrollLeft = parseFloat(keyEls[60].style.left) - wrap.clientWidth / 2 + whiteW * 3;
   }
   buildKeys(ui.range || "4");
+
+  // Every note a task asks for needs its own key: grow the piano (the Piano size setting) when it's too small
+  function fitPiano(lo, hi) {
+    const fit = Object.keys(PIANO_RANGES).find(k => PIANO_RANGES[k][0] <= Math.min(lo, LOW) && PIANO_RANGES[k][1] >= Math.max(hi, HIGH));
+    if ((lo < LOW || hi > HIGH) && fit) {
+      ui.range = fit;
+      $("piano-range").value = fit;
+      saveUi();
+      buildKeys(fit);
+      render();
+    }
+    checkPianoFit();
+  }
+  // The keys the current task needs, as [lowest, highest]
+  function pianoNeed() {
+    if (ear?.running) return earRange();
+    if (sight?.running) return sightSpan();
+    return ui.view === "sheet" ? songRange : null;
+  }
+  // Says so under the keyboard when the piano has been made too small for the task
+  function checkPianoFit() {
+    const need = pianoNeed();
+    $("kb-msg").hidden = !need || (need[0] >= LOW && need[1] <= HIGH);
+  }
   new ResizeObserver(layoutKeys).observe($("piano-wrap"));
 
   function flashKey(m) {
@@ -2045,6 +2069,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
         ? `Reset to ${Math.round(fileTempo)} BPM (the tempo in this file)`
         : "Reset to 100 BPM (this file has no tempo, so 100 is the default)";
       buildTimeline();
+      if (songRange) fitPiano(...songRange);
       $("sheet-title").textContent = parsed.title;
       $("player").hidden = false;
       renderSheet();
@@ -2222,6 +2247,8 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     xmlMeasures = [];
     timeline = [];
     totalLen = 0;
+    songRange = null;
+    checkPianoFit();
     loopFrom = loopTo = null;
     setPickMode(null);
     songKey = null;
@@ -2344,6 +2371,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     timeline.sort((a, b) => a.onset - b.onset);
     const last = xmlMeasures[xmlMeasures.length - 1];
     totalLen = last ? last.start + last.length : 0;
+    songRange = timeline.length ? [Math.min(...timeline.map(n => n.midi)), Math.max(...timeline.map(n => n.midi))] : null;
   }
 
   // All sound goes through one master gain, so the volume sliders (piano toolbar and player bar,
@@ -2395,7 +2423,6 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     stepIdx = steps.findIndex(st => st.onset >= fromPos - 1e-6);
     if (stepIdx === -1) stepIdx = steps.length;
     hits = new Set();
-    used = new Set();
     setPlayState("pause");
     schedTimer = setInterval(schedule, 25);
     schedule();
@@ -2863,7 +2890,6 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   let steps = [];      // [{ onset, midis: [...] }] notes you have to play, grouped by onset
   let stepIdx = 0;
   let hits = new Set(); // notes of the current step already played
-  let used = new Set(); // keys that already counted towards the current step
   let holdAt = null;    // playhead position while waiting
   let stats = { correct: 0, wrong: 0 };
 
@@ -2881,36 +2907,24 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     }
   }
 
-  // Move a note into the on-screen keyboard's range
-  function onKeyboard(m) {
-    while (m < LOW) m += 12;
-    while (m > HIGH) m -= 12;
-    return m;
-  }
-
   function currentTargets() {
     const step = waitActive() ? steps[stepIdx] : null;
     // Show what's coming up to a beat ahead, and always while waiting
     if (!step || (holdAt === null && step.onset - position() > 1)) return new Set();
-    return new Set(step.midis.filter(m => !hits.has(m)).map(onKeyboard));
+    return new Set(step.midis.filter(m => !hits.has(m)));
   }
 
   function practiceInput(m) {
     const step = steps[stepIdx];
     if (!step) return;
-    const any = $("any-octave").checked;
-    // Exact notes are compared as shown, since notes off the on-screen keyboard are moved onto it
-    const same = (a, b) => any ? a % 12 === b % 12 : onKeyboard(a) === onKeyboard(b);
     const near = holdAt !== null || step.onset - position() <= 1;
-    const open = near && !used.has(m) ? step.midis.filter(n => !hits.has(n) && same(n, m)) : [];
-    if (open.length) {
-      // In any octave, one key answers one note: the same note in two octaves needs two keys
-      (any ? [open.find(n => n === m) ?? open[0]] : open).forEach(n => hits.add(n));
-      used.add(m);
+    const wanted = near && step.midis.includes(m);
+    if (wanted && !hits.has(m)) {
+      hits.add(m);
       stats.correct++;
       feedback(m, "good");
       if (step.midis.every(n => hits.has(n))) completeStep();
-    } else if (near && step.midis.some(n => same(n, m))) {
+    } else if (wanted) {
       feedback(m, "good"); // repeated a note you already got
     } else if (holdAt !== null) {
       stats.wrong++;
@@ -2922,7 +2936,6 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   function completeStep() {
     stepIdx++;
     hits = new Set();
-    used = new Set();
     if (holdAt !== null) {
       // Restart the clock from where it was waiting
       anchorPos = holdAt;
@@ -2933,7 +2946,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   }
 
   function feedback(m, cls) {
-    const el = keyEls[onKeyboard(m)];
+    const el = keyEls[m];
     if (!el) return;
     el.classList.remove("good", "bad");
     void el.offsetWidth; // restart the flash if the same key is hit twice quickly
@@ -3069,6 +3082,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     saveUi();
     buildKeys(ui.range);
     render();
+    checkPianoFit();
   });
   $("all-octaves").checked = !!ui.allOctaves;
   $("all-octaves").addEventListener("change", () => { ui.allOctaves = $("all-octaves").checked; saveUi(); renderKeys(); });
@@ -3084,6 +3098,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     if (v !== "sight") sightStop();
     if (test) requestAnimationFrame(() => showProgress(v));
     ui.view = v;
+    checkPianoFit();
     saveUi();
     renderKeys();
     requestAnimationFrame(checkScoreSize);
@@ -3109,7 +3124,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // var (not const): setView can run earStop() before this line during start-up
   var ear = { running: false, idx: 0, answered: 0, correct: 0, target: null, awaiting: false, timers: [] };
   const earActive = () => ear.running && $("view-ear").classList.contains("active");
-  ui.ear = Object.assign({ secs: 60, range: "1", refMode: "cadence", anyOct: true, white: true }, ui.ear);
+  ui.ear = Object.assign({ secs: 60, range: "1", refMode: "cadence", white: true }, ui.ear);
   // The single "Play C first" switch became a choice; cadence is the new default
   if (!ui.ear.refDefault) { ui.ear.refMode = "cadence"; ui.ear.refDefault = true; delete ui.ear.ref; saveUi(); }
   const EAR_REF = {
@@ -3146,8 +3161,9 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   function earLater(fn, ms) { ear.timers.push(setTimeout(fn, ms)); }
   function earClearTimers() { ear.timers.forEach(clearTimeout); ear.timers = []; }
 
+  const earRange = () => ui.ear.range === "1" ? [60, 71] : ui.ear.range === "2" ? [48, 71] : [LOW, HIGH];
   function earPool() {
-    const [lo, hi] = ui.ear.range === "1" ? [60, 71] : ui.ear.range === "2" ? [48, 71] : [LOW, HIGH];
+    const [lo, hi] = earRange();
     const pool = [];
     for (let m = lo; m <= hi; m++) if (!(ui.ear.white && BLACK.has(m % 12))) pool.push(m);
     return pool;
@@ -3163,6 +3179,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     // No hints on the piano while testing
     selected.clear();
     setOverlay(null);
+    fitPiano(...earRange());
     earShow("run");
     startRoundClock(ear, $("ear-bar-fill"), ear.secs, earFinish);
     earNext();
@@ -3229,14 +3246,14 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // Wrong keys stay red until the question is answered
   let earMisses = new Set();
   function earClearMisses() {
-    earMisses.forEach(m => keyEls[onKeyboard(m)]?.classList.remove("bad"));
+    earMisses.forEach(m => keyEls[m]?.classList.remove("bad"));
     earMisses = new Set();
   }
 
   function earInput(m) {
     if (!ear.awaiting) return;
     const name = n => spellNote(n) + octaveOf(n);
-    const right = ui.ear.anyOct ? m % 12 === ear.target % 12 : m === ear.target;
+    const right = m === ear.target;
     const prompt = $("ear-prompt");
     ear.q.attempts++;
     if (!right) {
@@ -3244,7 +3261,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       // Only a first-try answer counts towards the score.
       ear.missed = true;
       earMisses.add(m);
-      keyEls[onKeyboard(m)]?.classList.add("bad");
+      keyEls[m]?.classList.add("bad");
       prompt.className = "ear-prompt bad";
       prompt.textContent = `Not ${name(m)}, try again`;
       earLater(() => earPlay(true), 500);
@@ -3267,7 +3284,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   }
 
   function earFlash(m, cls, ms) {
-    const el = keyEls[onKeyboard(m)];
+    const el = keyEls[m];
     if (!el) return;
     el.classList.add(cls);
     setTimeout(() => el.classList.remove(cls), ms);
@@ -3280,6 +3297,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
 
   function earFinish() {
     ear.running = false;
+    checkPianoFit();
     ear.awaiting = false;
     earClearTimers();
     earClearMisses();
@@ -3292,7 +3310,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       version: 2,
       at: new Date().toISOString(),
       score,
-      settings: { secs: ear.secs, range: ui.ear.range, refMode: ui.ear.refMode, anyOct: ui.ear.anyOct, white: ui.ear.white },
+      settings: { secs: ear.secs, range: ui.ear.range, refMode: ui.ear.refMode, white: ui.ear.white },
       durationSec: ear.secs,
       questions,
     });
@@ -3302,7 +3320,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // Each record: { test, version, at, score {correct,total,pct,perMin}, settings {...}, durationSec, questions [...] }.
   // correct = notes right on the first try, total = notes answered, perMin = correct per minute of the round.
   // New tests use their own "test" id; "variant" settings decide which rounds are fair to compare.
-  const RESULT_VARIANT_KEYS = { "single-note": ["range", "refMode", "anyOct", "white"], "sight-note": ["clef", "accidentals", "ledger"] }; // round length is ignored
+  const RESULT_VARIANT_KEYS = { "single-note": ["range", "refMode", "white"], "sight-note": ["clef", "accidentals", "ledger"] }; // round length is ignored
   const VIEW_TESTS = { ear: [["single-note", "Single note"]], sight: [["sight-note", "Single note"]] };
   const testSettings = test => test === "sight-note" ? ui.sight : ui.ear; // the current settings of a test
   const resultsStore = async mode => (await sheetDb()).transaction("results", mode).objectStore("results");
@@ -3319,7 +3337,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     }
     const ref = { none: "no reference", c: "C first", scale: "scale first", cadence: "cadence" }[st.refMode] || st.refMode;
     const range = { "1": "1 octave", "2": "2 octaves", all: "whole piano" }[st.range] || st.range;
-    return [ref, st.white ? "white keys" : "all keys", st.anyOct ? "any octave" : "exact octave", range].join(" · ");
+    return [ref, st.white ? "white keys" : "all keys", range].join(" · ");
   }
 
   // The one progress pane sits in whichever test view is open, showing that view's tests
@@ -3425,6 +3443,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     earClearMisses();
     earStopReference();
     ear.running = false;
+    checkPianoFit();
     ear.awaiting = false;
     earClearTimers();
     clearTimeout(ear.clock);
@@ -3439,13 +3458,12 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     $("ear-ref-play").hidden = ui.ear.refMode === "none";
     $("ear-ref-label").textContent = ref.label;
     $("ear-ref-play").dataset.tip = ref.tip || "";
-    $("ear-anyoct").checked = ui.ear.anyOct;
     $("ear-white").checked = ui.ear.white;
   }
   document.querySelectorAll("#view-ear .ear-count button").forEach(b => b.addEventListener("click", () => {
     ui.ear.secs = +b.dataset.secs; saveUi(); syncEarSettings();
   }));
-  [["ear-range", "range", "value"], ["ear-ref", "refMode", "value"], ["ear-anyoct", "anyOct", "checked"], ["ear-white", "white", "checked"]]
+  [["ear-range", "range", "value"], ["ear-ref", "refMode", "value"], ["ear-white", "white", "checked"]]
     .forEach(([id, key, prop]) => $(id).addEventListener("change", () => { ui.ear[key] = $(id)[prop]; saveUi(); syncEarSettings(); renderProgress(); }));
   $("ear-start").addEventListener("click", earStart);
   $("ear-again").addEventListener("click", earStart);
@@ -3485,18 +3503,10 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     ["setup", "run", "done"].forEach(x => { $("sight-" + x).hidden = x !== stage; });
   }
 
-  // Every note asked needs its own key: grow the piano (the Piano size setting) when it's too small
-  function sightFitPiano() {
+  // Lowest and highest key the chosen clefs can ask for
+  function sightSpan() {
     const ranges = sightClefs().map(sightRange);
-    const lo = Math.min(...ranges.map(r => r[0])), hi = Math.max(...ranges.map(r => r[1]));
-    if (lo >= LOW && hi <= HIGH) return;
-    const fit = Object.keys(PIANO_RANGES).find(k => PIANO_RANGES[k][0] <= Math.min(lo, LOW) && PIANO_RANGES[k][1] >= Math.max(hi, HIGH));
-    if (!fit) return;
-    ui.range = fit;
-    $("piano-range").value = fit;
-    saveUi();
-    buildKeys(fit);
-    render();
+    return [Math.min(...ranges.map(r => r[0])), Math.max(...ranges.map(r => r[1]))];
   }
 
   // A random clef, then a random key in its range. Black keys are written as a sharp or a flat.
@@ -3565,7 +3575,7 @@ ${note(n)}${wrong ? note(wrong) : ""}
     // No hints on the piano while testing
     selected.clear();
     setOverlay(null);
-    sightFitPiano();
+    fitPiano(...sightSpan());
     sightShow("run");
     startRoundClock(sight, $("sight-bar-fill"), sight.secs, sightFinish);
     sightNext();
@@ -3640,6 +3650,7 @@ ${note(n)}${wrong ? note(wrong) : ""}
 
   function sightFinish() {
     sight.running = false;
+    checkPianoFit();
     sight.awaiting = false;
     sightClearTimers();
     sightClearMisses();
@@ -3661,6 +3672,7 @@ ${note(n)}${wrong ? note(wrong) : ""}
     if (!sight || !sight.running) return;
     sightClearMisses();
     sight.running = false;
+    checkPianoFit();
     sight.awaiting = false;
     sightClearTimers();
     clearTimeout(sight.clock);
