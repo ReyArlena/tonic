@@ -57,7 +57,7 @@
     font-size: 0.9rem; padding: 5px 10px; border-radius: 8px;
     border: 1px solid var(--border); background: var(--panel); cursor: pointer;
   }
-  select:hover { border-color: var(--accent); }
+  @media (hover: hover) { select:hover { border-color: var(--accent); } }
   .status { color: var(--muted); font-size: 0.85rem; }
   .empty { color: var(--muted); }
 
@@ -95,7 +95,7 @@
   .overlay-bar.show { display: inline-flex; }
   .overlay-bar #overlay-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .overlay-bar .icon-btn { color: #2a1747; min-width: 24px; height: 24px; padding: 0; border-radius: 50%; }
-  .overlay-bar .icon-btn:hover { background: rgba(0, 0, 0, 0.08); }
+  @media (hover: hover) { .overlay-bar .icon-btn:hover { background: rgba(0, 0, 0, 0.08); } }
   .overlay-bar .icon-btn .ic { width: 14px; height: 14px; }
 
   .kb-row { display: flex; align-items: center; gap: 12px; }
@@ -118,7 +118,7 @@
     display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; margin-left: 8px; border-radius: 10px;
     border: none; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 0.9rem; cursor: pointer;
   }
-  .piano-hidden button:hover { filter: brightness(0.97); }
+  @media (hover: hover) { .piano-hidden button:hover { filter: brightness(0.97); } }
   .piano-hidden button .ic { width: 18px; height: 18px; }
   .piano-wrap { overflow-x: auto; overflow-y: hidden; }
   /* Red arrows floating over the piano's edges: a note off screen in that direction */
@@ -164,8 +164,8 @@
   .key.white.on, .key.black.on { background: var(--key-on); border-color: var(--key-on); }
   /* Subtle hover lift and press dip */
   .key { transition: filter 0.12s ease, transform 0.08s ease, background-color 0.12s ease; transform-origin: top; }
-  .key.white:hover { filter: brightness(0.95); }
-  .key.black:hover { filter: brightness(1.6); }
+  @media (hover: hover) { .key.white:hover { filter: brightness(0.95); } }
+  @media (hover: hover) { .key.black:hover { filter: brightness(1.6); } }
   .key.pressed { filter: brightness(0.82); transform: scaleY(0.985); }
   .key.black.pressed { filter: brightness(2); }
   /* Wait mode: keys to play pulse; correct/wrong presses flash */
@@ -237,7 +237,7 @@
     display: flex; align-items: center; justify-content: center; gap: 8px; height: 38px; border-radius: 10px;
     border: 1px dashed var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; cursor: pointer;
   }
-  .lib-add:hover { filter: brightness(0.97); }
+  @media (hover: hover) { .lib-add:hover { filter: brightness(0.97); } }
   .lib-note { display: flex; gap: 8px; margin: 0; font-size: 0.78rem; line-height: 1.4; color: var(--muted); }
   .lib-note .ic { width: 16px; height: 16px; margin-top: 1px; }
   .lib-search {
@@ -251,7 +251,7 @@
   .lib-msg:empty { display: none; }
   .lib-list { display: flex; flex-direction: column; gap: 4px; }
   .lib-item { display: flex; align-items: center; gap: 2px; border-radius: 10px; padding: 2px 2px 2px 0; }
-  .lib-item:hover { background: var(--panel-2); }
+  @media (hover: hover) { .lib-item:hover { background: var(--panel-2); } }
   .lib-item.current { background: var(--accent-soft); }
   .lib-open {
     flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
@@ -260,7 +260,7 @@
   .lib-name { font-weight: 600; font-size: 0.92rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lib-meta { font-size: 0.74rem; color: var(--muted); }
   .lib-item .icon-btn { color: var(--muted); }
-  .lib-item .icon-btn:hover { color: var(--text); }
+  @media (hover: hover) { .lib-item .icon-btn:hover { color: var(--text); } }
   .lib-item .icon-btn.confirm { color: #fff; background: #d64545; }
   .lib-rename { flex: 1; min-width: 0; margin: 4px 6px; padding: 4px 8px; border-radius: 7px; border: 1px solid var(--accent); background: var(--panel); font-size: 0.92rem; }
   .lib-empty { font-size: 0.85rem; color: var(--muted); padding: 8px 2px; }
@@ -282,7 +282,7 @@
     background: var(--accent); color: #fff; font-weight: 700; font-size: 1rem; cursor: pointer;
     box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 40%, transparent);
   }
-  .ear-start:hover { filter: brightness(1.1); }
+  @media (hover: hover) { .ear-start:hover { filter: brightness(1.1); } }
   .ear-progress { width: 100%; display: flex; justify-content: space-between; font-size: 0.88rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .ear-bar { width: 100%; height: 6px; border-radius: 999px; background: var(--bg); overflow: hidden; margin-top: -8px; }
   .ear-bar i { display: block; height: 100%; width: 0; background: var(--accent); }
@@ -335,7 +335,7 @@
   .res-graph .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
   .res-graph .trend { fill: none; stroke: var(--ok); stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.9; }
   .res-graph .pt { fill: var(--panel); stroke: var(--accent); stroke-width: 2; cursor: default; }
-  .res-graph .pt:hover { fill: var(--accent); }
+  @media (hover: hover) { .res-graph .pt:hover { fill: var(--accent); } }
   .res-empty { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 0.9rem; text-align: center; }
   .res-list { display: flex; flex-direction: column; }
   .res-row { display: grid; grid-template-columns: 70px 1fr auto; gap: 10px; align-items: center; padding: 6px 2px; border-top: 1px solid var(--border); font-size: 0.85rem; }
@@ -351,7 +351,8 @@
     border: 2px dashed var(--border); border-radius: 16px; color: var(--muted); text-align: center; padding: 24px;
     cursor: pointer; transition: border-color 0.15s, background-color 0.15s;
   }
-  .dropzone:hover, .dropzone.over { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+  .dropzone.over { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+  @media (hover: hover) { .dropzone:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--text); } }
   .dropzone .ic { width: 44px; height: 44px; color: var(--accent); }
   .dropzone strong { font-size: 1.05rem; color: var(--text); }
   .dropzone[hidden] { display: none; }
@@ -366,7 +367,7 @@
   details.sec > summary::-webkit-details-marker { display: none; }
   details.sec > summary .ic { width: 14px; height: 14px; transition: transform 0.15s; transform: rotate(-90deg); }
   details.sec[open] > summary .ic { transform: none; }
-  details.sec > summary:hover { color: var(--text); }
+  @media (hover: hover) { details.sec > summary:hover { color: var(--text); } }
   details.sec > .sec-body { padding-bottom: 12px; }
   .sidebar details.sec { padding: 0 16px; }
   .sidebar details.sec:first-of-type { border-top: none; }
@@ -382,7 +383,7 @@
     font-size: 0.88rem; border: 1px solid transparent; color: var(--text); cursor: default;
   }
   button.chip { cursor: pointer; }
-  button.chip:hover { border-color: var(--accent); }
+  @media (hover: hover) { button.chip:hover { border-color: var(--accent); } }
   .chip.hl { background: var(--hl-soft); color: #2a1747; }
   .chip.active { border-color: var(--accent); font-weight: 600; }
   .chip small { color: var(--muted); font-weight: 400; margin-left: 4px; }
@@ -407,7 +408,7 @@
     display: flex; flex-direction: column; align-items: center; padding: 6px 4px; cursor: pointer;
     border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2);
   }
-  .degree:hover { border-color: var(--accent); }
+  @media (hover: hover) { .degree:hover { border-color: var(--accent); } }
   .degree .num { font-size: 0.78rem; color: var(--muted); }
   .degree.active { border-color: var(--accent); background: var(--accent-soft); }
 
@@ -417,7 +418,7 @@
     height: 34px; border: none; border-radius: 8px; background: transparent; cursor: pointer;
     font-weight: 600; font-size: 0.9rem; color: var(--muted);
   }
-  .root-row button:hover { color: var(--text); background: color-mix(in srgb, var(--panel) 60%, transparent); }
+  @media (hover: hover) { .root-row button:hover { color: var(--text); background: color-mix(in srgb, var(--panel) 60%, transparent); } }
   .root-row button.active { background: var(--panel); color: var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
   .mode-row { margin-top: 10px; }
   .mode-row .tabs { display: flex; }
@@ -432,7 +433,7 @@
     border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); cursor: pointer; text-align: left;
     transition: border-color 0.12s, background-color 0.12s;
   }
-  .card:hover { border-color: var(--accent); }
+  @media (hover: hover) { .card:hover { border-color: var(--accent); } }
   .card.active { border-color: var(--accent); background: var(--accent-soft); }
   .card .sym { font-weight: 700; font-size: 1.05rem; line-height: 1.25; }
   .card .name { font-size: 0.76rem; color: var(--muted); }
@@ -471,7 +472,7 @@
     border: 1px solid transparent; background: transparent; color: var(--text);
     cursor: pointer; transition: background-color 0.12s, color 0.12s, border-color 0.12s;
   }
-  .icon-btn:hover { background: var(--accent-soft); }
+  @media (hover: hover) { .icon-btn:hover { background: var(--accent-soft); } }
   .icon-btn.small { min-width: 30px; height: 30px; padding: 0 6px; }
   .icon-btn.small .ic { width: 16px; height: 16px; }
   .icon-btn.labelled { padding: 0 12px 0 9px; font-size: 0.88rem; font-weight: 600; }
@@ -480,6 +481,8 @@
   .icon-btn.with-value { font-variant-numeric: tabular-nums; font-weight: 600; }
   .icon-btn.with-value small { color: var(--muted); font-weight: 500; font-size: 0.75rem; }
   .icon-btn[hidden] { display: none; }
+  /* Touch screens: hover styles are off there (they stick after a tap), so a press dims the button instead */
+  @media (hover: none) { button:not(.key):active, .icon-btn:active, summary:active { opacity: 0.6; } }
   .icon-btn.active { background: var(--accent-soft); color: var(--accent); }
   /* Toggles: real checkbox hidden inside, lit when checked (sibling selectors so state set from code shows) */
   .toggle { color: var(--muted); isolation: isolate; }
@@ -513,7 +516,8 @@
     width: 100%; margin: 4px 0 2px; height: 34px; border-radius: 9px; cursor: pointer; font-weight: 600; font-size: 0.88rem;
     border: 1px solid #d64545; background: transparent; color: #d64545;
   }
-  .danger-btn:hover, .danger-btn.confirm { background: #d64545; color: #fff; }
+  .danger-btn.confirm { background: #d64545; color: #fff; }
+  @media (hover: hover) { .danger-btn:hover { background: #d64545; color: #fff; } }
 
   /* ---------- Playback bar (bottom of the sheet view) ---------- */
   .playbar { border-top: 1px solid var(--border); background: var(--panel); padding: 8px 16px; }
@@ -529,7 +533,7 @@
     box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 40%, transparent);
     transition: transform 0.1s, filter 0.12s;
   }
-  .play-btn:hover { filter: brightness(1.1); }
+  @media (hover: hover) { .play-btn:hover { filter: brightness(1.1); } }
   .play-btn:active { transform: scale(0.94); }
   .play-btn .ic { width: 22px; height: 22px; }
   .chip-info {
@@ -539,10 +543,10 @@
   }
   .chip-info .ic { width: 15px; height: 15px; }
   button.chip-info { border: 1px solid transparent; cursor: pointer; }
-  button.chip-info:hover { border-color: var(--accent); color: var(--text); }
+  @media (hover: hover) { button.chip-info:hover { border-color: var(--accent); color: var(--text); } }
   /* The start point chip is blue like its line on the score; it rests while a loop is on */
   .chip-info.reset-start { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-  button.chip-info.reset-start:hover { color: var(--accent); }
+  @media (hover: hover) { button.chip-info.reset-start:hover { color: var(--accent); } }
   .chip-info.reset-start:disabled { opacity: 0.4; cursor: default; border-color: transparent; }
   .chip-info.stats { color: var(--text); font-weight: 600; }
   .chip-info.stats.empty { display: none; }
@@ -635,7 +639,7 @@
   }
   .loop-pick[hidden] { display: none; }
   .loop-pick button { border: none; border-radius: 7px; padding: 4px 10px; background: rgba(255, 255, 255, 0.92); color: #7a3f00; font-weight: 600; cursor: pointer; }
-  .loop-pick button:hover { background: #fff; }
+  @media (hover: hover) { .loop-pick button:hover { background: #fff; } }
   /* Hover indicator: the note a click would land on */
   .hover-mark { position: absolute; z-index: 2; width: 2px; border-radius: 1px; pointer-events: none; background: rgba(238, 138, 31, 0.8); display: none; }
   .hover-mark span {
