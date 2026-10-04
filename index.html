@@ -1284,6 +1284,7 @@
   function setSelection(midis, play = true) {
     selected.clear();
     midis.forEach(m => selected.add(m));
+    if (midis.length) fitPiano(Math.min(...midis), Math.max(...midis)); // wide chords get the keys they need
     if (play) playNotes([...selected].sort((a, b) => a - b));
     render();
   }
@@ -1465,8 +1466,8 @@
     return out;
   }
 
-  // Root-position voicing starting at a given octave (C3 = 48 by default)
-  function voicing(rootC, type, inversion = 0, base = 48) {
+  // Root-position voicing starting at a given octave (middle C = 60 by default)
+  function voicing(rootC, type, inversion = 0, base = 60) {
     let tones = type.iv.map(i => rootC + i);
     for (let k = 0; k < inversion; k++) tones.push(tones.shift() + 12);
     // Shift everything so the lowest note sits in the base octave
