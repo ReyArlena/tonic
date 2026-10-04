@@ -3780,6 +3780,8 @@ ${note(n)}${wrong ? note(wrong) : ""}
   function attachInputs(access) {
     const inputs = [...access.inputs.values()];
     inputs.forEach(i => i.onmidimessage = onMidiMessage);
+    // A MIDI keyboard can reach any key (its size isn't reported), so show the full piano
+    if (inputs.length) fitPiano(...PIANO_RANGES["88"]);
     setMidiStatus(inputs.length ? "Connected: " + inputs.map(i => i.name).join(", ") : "No MIDI device found. Plug one in.", inputs.length > 0);
   }
   $("midi").addEventListener("click", async () => {
