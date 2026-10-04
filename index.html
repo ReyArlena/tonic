@@ -3284,9 +3284,9 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   $("wait").addEventListener("change", () => {
     $("lh").checked = $("rh").checked = !$("wait").checked;
     // Wait mode only does anything while playing, so turning it on starts (or resumes) playback;
-    // turning it off pauses, rather than letting the song run on with full sound
+    // turning it off is a full reset: stopped, back at the start, count and green/red notes cleared
     if ($("wait").checked && !playing) $("xml-play").click();
-    else if (!$("wait").checked) pausePlayback();
+    else if (!$("wait").checked) resetPlayback();
   });
 
   // Changing practice settings mid-song picks up from the current spot
