@@ -271,7 +271,7 @@
   .ear-card .pane-head .spacer { flex: 1; }
   .sight-opts { display: flex; align-items: center; gap: 2px; margin: -3px 0; } /* full-size buttons in a heading as tall as the others */
   .sight-opts .divider { width: 1px; height: 22px; margin: 0 4px; background: var(--border); }
-  .ear-card .pane-head { position: static; } /* the whole view scrolls, so the heading scrolls with its card */
+  .ear-card .pane-head { position: static; min-height: 57px; border-radius: 13px 13px 0 0; } /* the whole view scrolls, so the heading scrolls with its card; as tall as a heading with a dropdown, so cards side by side line up */
   .ear-stage { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 10px 0 6px; text-align: center; }
   .ear-stage[hidden] { display: none; }
   .ear-lead { margin: 0; color: var(--muted); }
@@ -297,6 +297,14 @@
   /* Sight reading: one note on a staff (white paper, like the score) */
   .sight-staff { width: 300px; max-width: 100%; height: 250px; display: flex; flex-direction: column; justify-content: center; background: #fff; border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
   .sight-staff svg { display: block; margin: 0 auto; }
+  .sight-ref { background: #fff; border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+  .sight-ref svg { display: block; margin: 0 auto; }
+  /* The reference card folds away (closed to start with): its heading is the switch */
+  summary.pane-head { list-style: none; cursor: pointer; color: var(--muted); }
+  summary.pane-head::-webkit-details-marker { display: none; }
+  summary.pane-head .ic { width: 14px; height: 14px; transition: transform 0.15s; transform: rotate(-90deg); }
+  details[open] > summary.pane-head .ic { transform: none; }
+  details:not([open]) > summary.pane-head { border-bottom: none; border-radius: 13px; }
   /* The note you got right turns green; a wrong key shows as a red note beside it */
   .sight-staff.good .vf-stavenote:not(.wrong) path { fill: #2e9e6a; stroke: #2e9e6a; }
   .sight-staff .vf-stavenote.wrong path, .sight-staff.miss .vf-stavenote path { fill: #d64545; stroke: #d64545; }
@@ -306,6 +314,8 @@
   /* Desktop: the test and its progress side by side; stacked when there's no room for both */
   @media (min-width: 1000px) {
     .view-ear, .view-sight { grid-template-columns: repeat(2, minmax(0, 620px)); justify-content: center; }
+    .view-sight #res-pane { grid-column: 2; grid-row: 1 / span 2; } /* beside the test and the reference under it */
+    .view-sight { grid-template-rows: max-content 1fr; } /* a tall progress card stretches the second row, not the gap under the test */
   }
   .ear-progress-pane .pane-head { flex-wrap: wrap; }
   .ear-progress-pane .tabs .tab { padding: 4px 10px; font-size: 0.8rem; }
@@ -1124,6 +1134,11 @@
           </div>
         </div>
       </div>
+      <!-- Reference: the note names on the lines and in the spaces of each clef -->
+      <details class="pane ear-card" id="sight-ref-pane" data-sec="sightRef">
+        <summary class="pane-head"><span class="ic" data-ic="caret-down"></span><h2>Reference</h2></summary>
+        <div class="pane-body"><div class="sight-ref" id="sight-ref"></div></div>
+      </details>
     </section>
   </main>
 </div>
@@ -3978,6 +3993,49 @@ ${letter}${note(n)}${wrong ? note(wrong) : ""}
     // Already answered while this was waiting to draw: keep the question note green
     staff.className = "sight-staff" + (sight.solved === n ? " good" : cls ? " " + cls : "");
   }
+
+  // ---- Reference: both clefs with the names of the notes on the lines, then in the spaces
+  const SIGHT_REF = {
+    treble: { clef: "<sign>G</sign><line>2</line>", lines: ["E4", "G4", "B4", "D5", "F5"], spaces: ["F4", "A4", "C5", "E5"] },
+    bass: { clef: "<sign>F</sign><line>4</line>", lines: ["G2", "B2", "D3", "F3", "A3"], spaces: ["A2", "C3", "E3", "G3"] },
+  };
+  function sightRefXml() {
+    const bar = notes => notes.map(n => `<note><pitch><step>${n[0]}</step><octave>${n[1]}</octave></pitch><duration>1</duration><type>quarter</type><stem>none</stem><lyric><text>${n[0]}</text></lyric></note>`).join("");
+    const part = (id, c) => `<part id="${id}">
+<measure number="1"><attributes><divisions>1</divisions><key><fifths>0</fifths></key><time print-object="no"><beats>5</beats><beat-type>4</beat-type></time><clef>${c.clef}</clef></attributes>${bar(c.lines)}</measure>
+<measure number="2"><attributes><time print-object="no"><beats>4</beats><beat-type>4</beat-type></time></attributes>${bar(c.spaces)}</measure></part>`;
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1"><part-list><score-part id="P1"><part-name></part-name></score-part><score-part id="P2"><part-name></part-name></score-part></part-list>
+${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
+  }
+  // Drawn when the box first shows, and again when its width changes
+  let sightRefOsmd = null, sightRefWidth = 0;
+  async function sightRefDraw() {
+    const el = $("sight-ref"), w = el.clientWidth;
+    if (!window.opensheetmusicdisplay || !w || w === sightRefWidth) return;
+    sightRefWidth = w;
+    try {
+      sightRefOsmd ||= new opensheetmusicdisplay.OpenSheetMusicDisplay(el, {
+        backend: "svg", autoResize: false, drawTitle: false, drawSubtitle: false, drawComposer: false, drawLyricist: false,
+        drawCredits: false, drawPartNames: false, drawMeasureNumbers: false, drawMetronomeMarks: false, drawTimeSignatures: false,
+      });
+      await sightRefOsmd.load(sightRefXml());
+      sightRefOsmd.zoom = Math.min(1.4, w / 420);
+      Object.assign(sightRefOsmd.EngravingRules, { StretchLastSystemLine: true, PageLeftMargin: 1.5, PageRightMargin: 1.5, PageTopMargin: 1, PageBottomMargin: 1 });
+      sightRefOsmd.render();
+      // Letters in the app's font and a little smaller, each centred under its note (the engraver spaces them by eye)
+      const svg = el.querySelector("svg");
+      const cols = [...svg.querySelectorAll(".vf-notehead")].map(h => { const b = h.getBBox(); return b.x + b.width / 2; });
+      svg.querySelectorAll("text").forEach(t => {
+        const b = t.getBBox(), mid = b.x + b.width / 2;
+        t.setAttribute("x", cols.reduce((best, x) => Math.abs(x - mid) < Math.abs(best - mid) ? x : best));
+        t.setAttribute("text-anchor", "middle");
+        t.setAttribute("font-family", getComputedStyle(document.body).fontFamily);
+        t.setAttribute("font-size", parseFloat(t.getAttribute("font-size")) * 0.8 + "px");
+      });
+    } catch (e) {}
+  }
+  new ResizeObserver(sightRefDraw).observe($("sight-ref"));
 
   async function sightStart() {
     await sightLoadWeak();
