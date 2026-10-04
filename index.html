@@ -554,6 +554,12 @@
   }
   .pop.down .popover { bottom: auto; top: 100%; padding-bottom: 0; padding-top: 8px; }
   .pop.down .popover::before { inset: 8px 0 0 0; }
+
+  /* Piano on bottom (a setting): the piano row moves below the views; nothing else changes */
+  .app.piano-bottom { grid-template-rows: auto 1fr auto; }
+  .app.piano-bottom .keyboard { order: 1; border-bottom: none; border-top: 1px solid var(--border); }
+  .app.piano-bottom .keyboard .pop.down .popover { top: auto; bottom: 100%; padding-top: 0; padding-bottom: 10px; } /* opens upwards, clear of the keys */
+  .app.piano-bottom .keyboard .pop.down .popover::before { inset: 0 0 10px 0; }
   .pop.right .popover { left: auto; right: 0; transform: none; }
   .pop-title, .pop-row { padding: 0 14px; }
   .pop-title { padding-top: 10px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
@@ -632,6 +638,9 @@
     .score-wrap { height: 65vh; }
     .sidebar { border-left: none; border-top: 1px solid var(--border); }
     .playbar { position: sticky; bottom: 0; z-index: 40; }
+    /* The page scrolls here, so the piano stays at the bottom of the screen instead of the playbar */
+    .app.piano-bottom .keyboard { position: sticky; bottom: 0; z-index: 40; }
+    .app.piano-bottom .playbar { position: static; }
     .degree-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   }
   @media (max-width: 560px) {
@@ -690,6 +699,7 @@
             <hr>
             <label class="switch-row"><span>Highlights in all octaves<small>Off: scales and keys show one octave, from the root</small></span><input type="checkbox" id="all-octaves" class="switch"></label>
             <label class="switch-row"><span>Mini staff<small>Show the notes you play on a staff beside the piano</small></span><input type="checkbox" id="mini-staff-on" class="switch" checked></label>
+            <label class="switch-row"><span>Piano on bottom<small>Put the piano below everything else, handy on a tablet</small></span><input type="checkbox" id="piano-bottom" class="switch"></label>
             <hr>
             <label class="switch-row"><span>Synth for MIDI<small>Play sound for MIDI input (off if your keyboard has speakers)</small></span><input type="checkbox" id="midi-sound" class="switch"></label>
             <div class="status" id="midi-status">MIDI not connected</div>
@@ -4106,6 +4116,15 @@ ${letter}${note(n)}${wrong ? note(wrong) : ""}
   // The keys are learned ("Set keys"), since a MIDI keyboard doesn't report its size; 88 keys by default.
   const down = new Set(); // every MIDI key held right now
   let learnKeys = null;   // keys pressed so far while learning the reset keys
+  // Piano on bottom: a class on the page moves the piano row (CSS only)
+  $("piano-bottom").checked = !!ui.pianoBottom;
+  document.querySelector(".app").classList.toggle("piano-bottom", !!ui.pianoBottom);
+  $("piano-bottom").addEventListener("change", () => {
+    ui.pianoBottom = $("piano-bottom").checked; saveUi();
+    document.querySelector(".app").classList.toggle("piano-bottom", ui.pianoBottom);
+    checkScoreSize();
+  });
+
   $("midi-reset").checked = ui.midiReset !== false;
   $("midi-reset").addEventListener("change", () => { ui.midiReset = $("midi-reset").checked; saveUi(); });
   const resetKeys = () => ui.resetKeys || PIANO_RANGES["88"];
