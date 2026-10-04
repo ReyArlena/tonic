@@ -269,6 +269,7 @@
   .view-ear, .view-sight { padding: 16px; justify-items: center; align-items: start; overflow: auto; }
   .ear-card { width: 100%; max-width: 620px; overflow: visible; } /* settings pop-out must not be clipped */
   .ear-card .pane-head .spacer { flex: 1; }
+  .ear-card .pane-head { position: static; } /* the whole view scrolls, so the heading scrolls with its card */
   .ear-stage { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 10px 0 6px; text-align: center; }
   .ear-stage[hidden] { display: none; }
   .ear-lead { margin: 0; color: var(--muted); }
@@ -1076,6 +1077,8 @@
                 <hr>
                 <label class="switch-row"><span>Sharps and flats<small>Include the black keys</small></span><input type="checkbox" id="sight-acc" class="switch" checked></label>
                 <label class="switch-row"><span>Ledger lines<small>Notes up to two lines above and below the staff</small></span><input type="checkbox" id="sight-ledger" class="switch" checked></label>
+                <label class="switch-row"><span>Test worst notes<small>Mostly notes you have missed or been slow on</small></span><input type="checkbox" id="sight-worst" class="switch"></label>
+                <label class="switch-row"><span>Show letters on staff<small>Note name above the note. Practice only: rounds aren't saved</small></span><input type="checkbox" id="sight-letters" class="switch"></label>
               </div>
             </div>
           </div>
@@ -3825,7 +3828,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // var (not const): setView can run sightStop() before this line during start-up
   var sight = { running: false, idx: 0, answered: 0, correct: 0, target: null, awaiting: false, timers: [] };
   const sightActive = () => sight.running && $("view-sight").classList.contains("active");
-  ui.sight = Object.assign({ secs: 60, clef: "both", accidentals: true, ledger: true }, ui.sight);
+  ui.sight = Object.assign({ secs: 60, clef: "both", accidentals: true, ledger: true, worst: false, letters: false }, ui.sight);
   // [low, high] MIDI notes of each clef: up to two ledger lines either side, or only notes that need none
   const SIGHT_RANGES = {
     treble: { ledger: [57, 84], staff: [62, 79] }, // A3 to C6, or D4 to G5
@@ -3848,8 +3851,62 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     return [Math.min(...ranges.map(r => r[0])), Math.max(...ranges.map(r => r[1]))];
   }
 
+  // ---- Worst notes: how weak each written note is, from 0 (known) to 1 (missed), worked out from past rounds.
+  // Every answer moves its note's score part of the way towards 1 (wrong first try), 0.5 (right but slow)
+  // or 0 (right and quick), so a note drops out after a few good answers and comes back when missed again.
+  const SIGHT_WEAK_SHARE = 0.75; // how many questions come from the weak notes
+  const SIGHT_WEAK_FADE = 0.3;   // how far one answer moves a note's score
+  const SIGHT_WEAK_AT = 0.25;    // a note is weak from this score up
+  const SIGHT_WEAK_MIN = 3;      // fewer weak notes than this: plain random notes
+  let sightWeak = new Map();     // "clef name" (the note as written) -> score
+  let sightMedian = null;        // usual answer time in past rounds; slow is well above it
+  const sightKey = q => q.clef + " " + q.name;
+  const sightNoteName = n => n.step + (n.alter > 0 ? "#" : n.alter < 0 ? "b" : "") + n.octave;
+
+  function sightLearn(q) {
+    const miss = !q.firstTry ? 1 : sightMedian && q.seconds > 1.5 * sightMedian ? 0.5 : 0;
+    const key = sightKey(q), old = sightWeak.get(key);
+    sightWeak.set(key, old === undefined ? miss : old + SIGHT_WEAK_FADE * (miss - old));
+  }
+  async function sightLoadWeak() {
+    let all = [];
+    try { all = await idbReq((await resultsStore("readonly")).index("test").getAll("sight-note")); } catch (e) {}
+    const qs = all.sort((a, b) => a.at.localeCompare(b.at)).flatMap(r => r.questions || []).filter(q => q.name && q.clef && q.seconds != null);
+    const times = qs.map(q => q.seconds).sort((a, b) => a - b);
+    sightMedian = times.length ? times[times.length >> 1] : null;
+    sightWeak = new Map();
+    qs.forEach(sightLearn);
+  }
+  // The weak notes the current settings can ask for
+  function sightWeakPool() {
+    const pool = [];
+    for (const clef of sightClefs()) {
+      const [lo, hi] = sightRange(clef);
+      for (let midi = lo; midi <= hi; midi++) {
+        const black = BLACK.has(midi % 12);
+        if (black && !ui.sight.accidentals) continue;
+        for (const flat of black ? [false, true] : [false]) {
+          const n = sightSpell(midi, flat), name = sightNoteName(n);
+          const score = sightWeak.get(sightKey({ clef, name })) || 0;
+          if (score >= SIGHT_WEAK_AT) pool.push({ clef, midi, ...n, name, score });
+        }
+      }
+    }
+    return pool;
+  }
+  const sightWeakOn = () => ui.sight.worst && sightWeakPool().length >= SIGHT_WEAK_MIN;
+
   // A random clef, then a random key in its range. Black keys are written as a sharp or a flat.
+  // With "Test worst notes" on, most picks come from the weak notes instead, the weakest most often.
   function sightPick() {
+    if (ui.sight.worst && Math.random() < SIGHT_WEAK_SHARE) {
+      const all = sightWeakPool(), pool = all.filter(n => !sight.target || n.midi !== sight.target.midi);
+      if (all.length >= SIGHT_WEAK_MIN && pool.length) {
+        let r = Math.random() * pool.reduce((a, n) => a + n.score, 0);
+        const { score, ...pick } = pool.find(n => (r -= n.score) < 0) || pool[pool.length - 1];
+        return pick;
+      }
+    }
     const clefs = sightClefs();
     for (;;) {
       const clef = clefs[Math.floor(Math.random() * clefs.length)];
@@ -3859,7 +3916,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       if (black && !ui.sight.accidentals) continue;
       if (sight.target && midi === sight.target.midi) continue; // never the same note twice in a row
       const n = sightSpell(midi, Math.random() < 0.5);
-      return { clef, midi, ...n, name: n.step + (n.alter > 0 ? "#" : n.alter < 0 ? "b" : "") + n.octave };
+      return { clef, midi, ...n, name: sightNoteName(n) };
     }
   }
   // How a key is written: white keys as they are, black keys as a flat or a sharp
@@ -3872,6 +3929,8 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // One bar holding the question note (and, after a wrong key, the note that was played),
   // drawn with the same engraver as the sheet music
   function sightXml(n, wrong) {
+    // Practice mode: the question note's letter above the staff (the octave is still read from the staff)
+    const letter = ui.sight.letters ? `<direction placement="above"><direction-type><words font-size="14" font-weight="bold">${n.name.replace(/-?\d+$/, "")}</words></direction-type></direction>` : "";
     const clef = n.clef === "treble" ? "<sign>G</sign><line>2</line>" : "<sign>F</sign><line>4</line>";
     const note = n => `<note><pitch><step>${n.step}</step>${n.alter ? `<alter>${n.alter}</alter>` : ""}<octave>${n.octave}</octave></pitch><duration>1</duration><type>quarter</type>${
       n.alter ? `<accidental>${n.alter > 0 ? "sharp" : "flat"}</accidental>` : ""}</note>`;
@@ -3879,7 +3938,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
 <score-partwise version="3.1"><part-list><score-part id="P1"><part-name></part-name></score-part></part-list>
 <part id="P1"><measure number="1">
 <attributes><divisions>1</divisions><key><fifths>0</fifths></key><time print-object="no"><beats>${wrong ? 2 : 1}</beats><beat-type>4</beat-type></time><clef>${clef}</clef></attributes>
-${note(n)}${wrong ? note(wrong) : ""}
+${letter}${note(n)}${wrong ? note(wrong) : ""}
 </measure></part></score-partwise>`;
   }
 
@@ -3908,7 +3967,8 @@ ${note(n)}${wrong ? note(wrong) : ""}
     staff.className = "sight-staff" + (sight.solved === n ? " good" : cls ? " " + cls : "");
   }
 
-  function sightStart() {
+  async function sightStart() {
+    await sightLoadWeak();
     sightClearTimers();
     Object.assign(sight, { running: true, secs: ui.sight.secs, idx: 0, answered: 0, correct: 0, target: null, awaiting: false, questions: [] });
     // No hints on the piano while testing
@@ -3974,6 +4034,7 @@ ${note(n)}${wrong ? note(wrong) : ""}
     if (!sight.missed) sight.correct++;
     sight.q.firstTry = !sight.missed;
     sight.q.seconds = +((performance.now() - sight.q.askedAt) / 1000).toFixed(2);
+    if (!ui.sight.letters) sightLearn(sight.q); // practice answers don't count
     sightClearMisses();
     earFlash(m, "good", 400);
     prompt.className = "ear-prompt good";
@@ -3983,7 +4044,7 @@ ${note(n)}${wrong ? note(wrong) : ""}
   }
 
   function sightUpdateProgress() {
-    $("sight-step").textContent = `Note ${sight.idx}`;
+    $("sight-step").textContent = `Note ${sight.idx}` + (ui.sight.worst && !sightWeakOn() ? " · random notes, too few worst notes yet" : "");
     $("sight-running-score").textContent = `${sight.correct} right first time`;
   }
 
@@ -3996,12 +4057,14 @@ ${note(n)}${wrong ? note(wrong) : ""}
     const { score, questions } = roundResult(sight, sight.secs);
     showRoundScore("sight", score);
     sightShow("done");
+    // With the letters shown the round is practice: not saved, so it can't skew the progress or the worst notes
+    if (ui.sight.letters) { $("sight-score-sub").textContent += ". Practice round, not saved"; return; }
     saveResult({
       test: "sight-note",
       version: 2,
       at: new Date().toISOString(),
       score,
-      settings: { secs: sight.secs, clef: ui.sight.clef, accidentals: ui.sight.accidentals, ledger: ui.sight.ledger },
+      settings: { secs: sight.secs, clef: ui.sight.clef, accidentals: ui.sight.accidentals, ledger: ui.sight.ledger, worst: ui.sight.worst },
       durationSec: sight.secs,
       questions,
     });
@@ -4023,11 +4086,13 @@ ${note(n)}${wrong ? note(wrong) : ""}
     $("sight-clef").value = ui.sight.clef;
     $("sight-acc").checked = ui.sight.accidentals;
     $("sight-ledger").checked = ui.sight.ledger;
+    $("sight-worst").checked = ui.sight.worst;
+    $("sight-letters").checked = ui.sight.letters;
   }
   document.querySelectorAll("#view-sight .ear-count button").forEach(b => b.addEventListener("click", () => {
     ui.sight.secs = +b.dataset.secs; saveUi(); syncSightSettings();
   }));
-  [["sight-clef", "clef", "value"], ["sight-acc", "accidentals", "checked"], ["sight-ledger", "ledger", "checked"]]
+  [["sight-clef", "clef", "value"], ["sight-acc", "accidentals", "checked"], ["sight-ledger", "ledger", "checked"], ["sight-worst", "worst", "checked"], ["sight-letters", "letters", "checked"]]
     .forEach(([id, key, prop]) => $(id).addEventListener("change", () => {
       ui.sight[key] = $(id)[prop]; saveUi(); sightStop(); renderProgress(); // new settings start a new round
     }));
