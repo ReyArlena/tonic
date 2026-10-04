@@ -101,7 +101,26 @@
   .kb-row { display: flex; align-items: center; gap: 12px; }
   .kb-msg { margin-top: 6px; font-size: 0.82rem; color: #d64545; text-align: center; }
   .kb-msg[hidden] { display: none; }
-  .piano-wrap { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+  .piano-box { position: relative; flex: 1; min-width: 0; }
+  .piano-wrap { overflow-x: auto; overflow-y: hidden; }
+  /* Red arrows floating over the piano's edges: a note off screen in that direction */
+  .kb-arrow {
+    position: absolute; top: 50%; z-index: 5; width: 40px; height: 48px; margin-top: -24px; border-radius: 10px;
+    display: grid; place-items: center; background: #e5383b; color: #fff; opacity: 0; pointer-events: none;
+    box-shadow: 0 0 0 2px #fff, 0 4px 14px rgba(0, 0, 0, 0.4);
+  }
+  /* --kb-edge: the gap beside the piano when it's narrower than its space, so the arrows hug the keys */
+  .kb-arrow.left { left: calc(var(--kb-edge, 0px) + 8px); }
+  .kb-arrow.right { right: calc(var(--kb-edge, 0px) + 8px); }
+  .kb-arrow .ic { width: 26px; height: 26px; display: block; }
+  .kb-arrow.left .ic { transform: rotate(90deg); }
+  .kb-arrow.right .ic { transform: rotate(-90deg); }
+  /* Orange while the song plays a note off screen; red (your key, or a note to play) wins */
+  .kb-arrow.play { opacity: 1; background: var(--play); }
+  .kb-arrow.flash { background: #e5383b; animation: kb-arrow-flash 0.6s ease-out; }
+  .kb-arrow.stay { background: #e5383b; animation: kb-arrow-stay 0.5s ease-in-out infinite alternate; }
+  @keyframes kb-arrow-flash { 0% { opacity: 0; } 15%, 60% { opacity: 1; } 100% { opacity: 0; } }
+  @keyframes kb-arrow-stay { from { opacity: 0.5; } to { opacity: 1; } }
   /* Mini staff: the notes being played, on white paper like the score */
   .mini-staff {
     position: relative; flex: none; width: 140px; height: var(--kb-h); overflow: hidden;
@@ -657,7 +676,11 @@
       </div>
     </div>
     <div class="kb-row">
-      <div class="piano-wrap" id="piano-wrap"><div class="piano" id="piano"></div></div>
+      <div class="piano-box">
+        <div class="piano-wrap" id="piano-wrap"><div class="piano" id="piano"></div></div>
+        <div class="kb-arrow left" id="kb-arrow-l"><span class="ic" data-ic="caret-down"></span></div>
+        <div class="kb-arrow right" id="kb-arrow-r"><span class="ic" data-ic="caret-down"></span></div>
+      </div>
       <div class="mini-staff" id="mini-staff" data-tip="The notes being played, on the staff"></div>
     </div>
     <div class="kb-msg" id="kb-msg" hidden>Your current task needs more keys than are currently visible. You can change the piano size in settings.</div>
@@ -1191,6 +1214,7 @@
       if (!isBlack) wi++;
     }
     pianoEl.style.width = wi * whiteW + "px";
+    wrap.parentElement.style.setProperty("--kb-edge", Math.max(0, (wrap.clientWidth - wi * whiteW) / 2) + "px");
     pianoEl.style.height = Math.min(150, Math.round(whiteW * 5.6)) + "px";
     pianoEl.classList.toggle("narrow", whiteW < 28);
     // When the strip has to scroll, start with middle C in view
@@ -1222,6 +1246,16 @@
     $("kb-msg").hidden = !need || (need[0] >= LOW && need[1] <= HIGH);
   }
   new ResizeObserver(layoutKeys).observe($("piano-wrap"));
+
+  // A played note that's off screen flashes the arrow on that side
+  function offscreenArrow(m) {
+    if (m >= LOW && m <= HIGH) return;
+    const el = $(m < LOW ? "kb-arrow-l" : "kb-arrow-r");
+    el.classList.remove("flash");
+    void el.offsetWidth; // restart the flash
+    el.classList.add("flash");
+  }
+  ["kb-arrow-l", "kb-arrow-r"].forEach(id => $(id).addEventListener("animationend", () => $(id).classList.remove("flash")));
 
   function flashKey(m) {
     keyEls[m].classList.add("pressed");
@@ -1617,6 +1651,13 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       else if (m % 12 === 0) label = "C" + octaveOf(m);
       el.querySelector(".lbl").textContent = label;
     }
+    // A Wait mode note that's off screen keeps its arrow lit until it's played; so does a sounding one
+    [["kb-arrow-l", m => m < LOW], ["kb-arrow-r", m => m > HIGH]].forEach(([id, off]) => {
+      const stay = [...targetMidis].some(off);
+      if (!stay && $(id).classList.contains("stay")) $(id).classList.remove("flash");
+      $(id).classList.toggle("stay", stay);
+      $(id).classList.toggle("play", [...playingMidis].some(off));
+    });
     $("overlay-bar").classList.toggle("show", !!overlay);
     $("overlay-label").textContent = overlay ? "Highlighted: " + overlay.label : "";
     renderMiniStaff();
@@ -3705,6 +3746,7 @@ ${note(n)}${wrong ? note(wrong) : ""}
     const cmd = status & 0xf0;
     if (cmd === 0x90 && vel > 0) {
       staffPress(note);
+      offscreenArrow(note);
       if (earActive()) {
         if ($("midi-sound").checked) playNotes([note], true);
         earInput(note);
