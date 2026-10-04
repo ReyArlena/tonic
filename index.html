@@ -2943,6 +2943,10 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     $("practice-stats").parentElement.classList.toggle("empty", !$("practice-stats").textContent);
   }
 
+  // Wait mode starts with both hands' sound off, so nothing plays unless you turn it on;
+  // leaving it turns both back on
+  $("wait").addEventListener("change", () => { $("lh").checked = $("rh").checked = !$("wait").checked; });
+
   // Changing practice settings mid-song picks up from the current spot
   ["wait", "practice-hand"].forEach(id => $(id).addEventListener("change", () => {
     updateStats();
