@@ -1135,13 +1135,6 @@
 
   // ---------- Remembered UI state (view, sidebar, open sections) ----------
   const UI_KEY = "tonic-ui", DB_NAME = "tonic";
-  // Earlier versions were called Chord Finder: carry saved settings over once
-  try {
-    if (!localStorage.getItem(UI_KEY) && localStorage.getItem("chord-finder-ui")) {
-      localStorage.setItem(UI_KEY, localStorage.getItem("chord-finder-ui"));
-      localStorage.removeItem("chord-finder-ui");
-    }
-  } catch (e) {}
   const ui = (() => { try { return JSON.parse(localStorage.getItem(UI_KEY)) || {}; } catch (e) { return {}; } })();
   ui.sec = ui.sec || {};
   function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch (e) {} }
@@ -2137,21 +2130,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     });
   }
   function sheetDb() {
-    return dbPromise ||= openDb(DB_NAME).then(async db => {
-      // Move sheets saved under the old "chord-finder" name into this database, once
-      try {
-        const names = (await indexedDB.databases?.()) || [];
-        if (names.some(d => d.name === "chord-finder")) {
-          const old = await openDb("chord-finder");
-          const recs = await idbReq(old.transaction("sheets", "readonly").objectStore("sheets").getAll());
-          const store = db.transaction("sheets", "readwrite").objectStore("sheets");
-          await Promise.all(recs.map(rec => idbReq(store.put(rec))));
-          old.close();
-          indexedDB.deleteDatabase("chord-finder");
-        }
-      } catch (e) {}
-      return db;
-    });
+    return dbPromise ||= openDb(DB_NAME);
   }
   const idbReq = r => new Promise((resolve, reject) => { r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
   const sheetStore = async mode => (await sheetDb()).transaction("sheets", mode).objectStore("sheets");
@@ -3396,7 +3375,6 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   async function renderProgress() {
     let all = [];
     try { all = await idbReq((await resultsStore("readonly")).index("test").getAll($("res-test").value)); } catch (e) {}
-    all = all.filter(r => r.score.perMin != null); // rounds from before the tests were timed have no speed
     const test = $("res-test").value, filter = ui.resFilter || "same";
     document.querySelectorAll("#res-filter .tab").forEach(t => t.classList.toggle("active", t.dataset.filter === filter));
     const now = variantOf(test, testSettings(test));
