@@ -2076,7 +2076,51 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
 
   // ---------- Sheet music (MusicXML) ----------
   const STEP_SEMIS = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  // Measures in playing order: a printed measure inside a repeat appears once per pass.
+  // Each entry has src (its index in the printed score and in OSMD's MeasureList), pass (0 = first time
+  // through) and passes (how many times it's played). Positions (start) run through the playing order.
   let xmlMeasures = [];
+  let printedMeasures = []; // the measures as written, before repeats are unrolled
+
+  // "m5", or "m5 (2nd)" for a later pass through a repeat
+  const ordinal = n => n + (["th", "st", "nd", "rd"][n % 10 > 3 || Math.floor(n / 10) % 10 === 1 ? 0 : n % 10]);
+  const mLabel = m => `m${m.number}` + (m.pass ? ` (${ordinal(m.pass + 1)})` : "");
+
+  // Lay the printed measures out in playing order. order lists printed measure indices as they are played
+  // (from the score's cursor walk); null, or an order that doesn't cover the score, means straight through.
+  function unrollRepeats(order) {
+    const n = printedMeasures.length;
+    if (order) {
+      // The cursor only stops where there are notes or rests, so a bar with nothing in it is skipped: put it back
+      order = order.flatMap((i, k) => {
+        const prev = k ? order[k - 1] : -1;
+        return i > prev + 1 ? Array.from({ length: i - prev }, (_, j) => prev + 1 + j) : [i];
+      });
+      const last = order[order.length - 1];
+      for (let i = last + 1; i < n; i++) order.push(i);
+    }
+    const ok = order && order.every(i => i >= 0 && i < n) && new Set(order).size === n;
+    if (!ok) order = printedMeasures.map((_, i) => i);
+    const passes = {}, seen = {};
+    order.forEach(i => { passes[i] = (passes[i] || 0) + 1; });
+    let start = 0;
+    xmlMeasures = order.map(i => {
+      const pass = seen[i] = (seen[i] ?? -1) + 1;
+      const m = { ...printedMeasures[i], src: i, pass, passes: passes[i], start };
+      start += m.length;
+      return m;
+    });
+  }
+
+  // A printed measure inside a repeat is played more than once: the pass nearest the playhead
+  function passAt(src) {
+    const ref = playing ? position() : (pausedAt ?? playFromPos);
+    let best = -1;
+    xmlMeasures.forEach((m, i) => {
+      if (m.src === src && (best === -1 || Math.abs(m.start - ref) < Math.abs(xmlMeasures[best].start - ref))) best = i;
+    });
+    return best;
+  }
 
   function parseMusicXML(text) {
     const doc = new DOMParser().parseFromString(text, "application/xml");
@@ -2215,7 +2259,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
         if (prev && sym && prev.sym === sym) { prev.notes = prev.notes.concat(notes); prev.end = (s + 1) * segLen; continue; }
         segs.push({ sym, fit, notes, start: s * segLen, end: (s + 1) * segLen });
       }
-      html += `<div class="measure${idx === playFrom ? " start" : ""}" data-measure="${idx}"><div class="mnum">m${esc(m.number)}</div><div class="chips">` +
+      html += `<div class="measure${idx === playFrom ? " start" : ""}" data-measure="${idx}"><div class="mnum">${esc(mLabel(m))}</div><div class="chips">` +
         segs.map((s, k) => s.sym
           ? chip(s.sym, `data-seg="${idx}|${k}"`)
           : `<span class="chip" data-segi="${idx}|${k}">${s.notes.length ? [...new Set(s.notes.map(n => pc(n.midi)))].join(" ") : "rest"}</span>`).join("") +
@@ -2235,7 +2279,8 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       const parsed = parseMusicXML(text);
       if (!parsed.measures.length) throw new Error("no measures found");
       xmlTitle = parsed.title;
-      xmlMeasures = parsed.measures;
+      printedMeasures = parsed.measures;
+      unrollRepeats(null); // printed order until the score is engraved
       stopPlayback();
       clearTrail();
       playFrom = 0;
@@ -2248,13 +2293,14 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       $("tempo-reset").dataset.tip = fileTempo
         ? `Reset to ${Math.round(fileTempo)} BPM (the tempo in this file)`
         : "Reset to 100 BPM (this file has no tempo, so 100 is the default)";
-      buildTimeline();
-      if (songRange) fitPiano(...songRange);
       $("sheet-title").textContent = parsed.title;
       $("player").hidden = false;
+      // Engrave first: the score's cursor walk gives the playing order (repeats unrolled) everything else builds on
+      await renderScore(text);
+      buildTimeline();
+      if (songRange) fitPiano(...songRange);
       renderSheet();
       updatePlayFrom();
-      await renderScore(text);
       applySongKey();
     }
   }
@@ -2517,7 +2563,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     const [mi, si] = b.dataset.seg.split("|").map(Number);
     const m = xmlMeasures[mi], seg = m.segs[si];
     document.querySelectorAll("[data-seg]").forEach(x => x.classList.toggle("active", x === b));
-    overlay = { label: `m${m.number} notes (${b.textContent})`, midis: new Set(seg.notes.map(n => n.midi)) };
+    overlay = { label: `${mLabel(m)} notes (${b.textContent})`, midis: new Set(seg.notes.map(n => n.midi)) };
     $("show-key").checked = false;
     // Voice slash chords as the matching inversion so the bass note is lowest
     const { rootC, type, bassC } = seg.fit;
@@ -2711,9 +2757,12 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     }
     const id = mi + "|" + si;
     if (id === lastNow) return;
+    const lastMi = lastNow === null ? -1 : +lastNow.split("|")[0];
     lastNow = id;
     document.querySelectorAll(".measure.now, .chip.now").forEach(x => x.classList.remove("now"));
     if (mi === -1) return;
+    // Entering a measure that is played more than once: its trail from the earlier pass makes way
+    if (mi !== lastMi && xmlMeasures[mi].passes > 1 && (hitNotes.length || missNotes.length)) { paintHits(); drawMisses(); }
     document.querySelector(`[data-measure="${mi}"]`)?.classList.add("now");
     document.querySelector(`[data-seg="${mi}|${si}"], [data-segi="${mi}|${si}"]`)?.classList.add("now");
   }
@@ -2721,7 +2770,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   function updatePlayFrom() {
     const m = xmlMeasures[playFrom];
     const beat = m ? beatOf(m, playFromPos) : 1;
-    $("play-from").textContent = m ? `m${m.number}/b${+beat.toFixed(2)}` : "";
+    $("play-from").textContent = m ? `${mLabel(m)}/b${+beat.toFixed(2)}` : "";
     document.querySelectorAll(".measure").forEach(x => x.classList.toggle("start", +x.dataset.measure === playFrom));
     if (!playing && m) moveCursor(playFromPos);
     drawScoreMarks();
@@ -2808,7 +2857,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     const m = xmlMeasures[idx];
     if (pos === null) return { idx, start: m.start, end: m.start + m.length, whole: true };
     const rel = pos - m.start;
-    const next = noteColumns(idx).find(c => c.rel > rel + 1e-4);
+    const next = noteColumns(m.src).find(c => c.rel > rel + 1e-4);
     return { idx, start: pos, end: m.start + (next ? next.rel : m.length) };
   }
 
@@ -2823,9 +2872,9 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   function fmtPos(pos, isEnd = false) {
     const m = xmlMeasures[measureAt(pos, isEnd)];
     if (!m) return "?";
-    if (isEnd && Math.abs(pos - m.start - m.length) < 1e-6) return `end of m${m.number}`;
+    if (isEnd && Math.abs(pos - m.start - m.length) < 1e-6) return `end of ${mLabel(m)}`;
     const beat = beatOf(m, pos);
-    return `m${m.number}/b${+beat.toFixed(2)}`;
+    return `${mLabel(m)}/b${+beat.toFixed(2)}`;
   }
 
   function setPickMode(mode) {
@@ -2846,7 +2895,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     const [a, b] = p.start < loopFirst.start ? [p, loopFirst] : [loopFirst, p];
     loopFrom = a.start;
     loopTo = b.end;
-    loopEndLabel = b.whole ? `end of m${xmlMeasures[b.idx].number}` : fmtPos(b.start);
+    loopEndLabel = b.whole ? `end of ${mLabel(xmlMeasures[b.idx])}` : fmtPos(b.start);
     loopFirst = null;
     setPickMode(null);
     resetAndGo(); // a new section is a new exercise: back to its start, count and trail cleared
@@ -2908,22 +2957,45 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     await osmd.load(text);
     osmd.render();
     scoreWidth = el.clientWidth;
-    indexCursor();
+    // The cursor's walk is the playing order: OSMD follows repeat signs, voltas, D.S. and codas
+    const runs = walkCursor();
+    unrollRepeats(runs.map(r => r.src));
+    indexCursor(runs);
     moveCursor(playFromPos);
     setPickMode(loopPick);
   }
 
-  // Walk the cursor once through the piece to record when each step happens
-  function indexCursor() {
-    const c = osmd.cursor;
+  // One pass of the cursor through the piece, grouped by the measure it is in:
+  // [{ src: printed measure index, times: [quarters into that measure, one per cursor step] }].
+  // A measure played again after a repeat sign is a new run.
+  function walkCursor() {
+    const c = osmd.cursor, measures = osmd.Sheet.SourceMeasures;
     c.show();
     c.reset();
-    cursorTimes = [];
+    const runs = [];
+    let lastT = -1;
     while (!c.Iterator.EndReached) {
-      cursorTimes.push(c.Iterator.currentTimeStamp.RealValue * 4);
+      const src = c.Iterator.CurrentMeasureIndex, t = c.Iterator.currentTimeStamp.RealValue;
+      const last = runs[runs.length - 1];
+      if (!last || last.src !== src || t <= lastT) runs.push({ src, times: [] });
+      runs[runs.length - 1].times.push((t - measures[src].AbsoluteTimestamp.RealValue) * 4);
+      lastT = t;
       c.next();
     }
     c.reset();
+    return runs;
+  }
+
+  // Record the playing position of each cursor step, so moveCursor can find the step for a position
+  function indexCursor(runs = walkCursor()) {
+    // The runs follow the playing order, minus any empty bars the cursor skipped
+    let k = -1;
+    cursorTimes = runs.flatMap(r => {
+      k++;
+      while (k < xmlMeasures.length && xmlMeasures[k].src !== r.src) k++;
+      const m = xmlMeasures[k] || xmlMeasures.find(x => x.src === r.src);
+      return r.times.map(t => (m ? m.start : 0) + t);
+    });
     cursorIdx = 0;
   }
 
@@ -2978,10 +3050,10 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     return { ox: sr.left - br.left + box.scrollLeft, oy: sr.top - br.top + box.scrollTop, u: 10 * osmd.zoom };
   }
 
-  // Note columns of a measure across all staves: [{ x (px), rel (quarters from measure start) }]
-  function noteColumns(idx) {
+  // Note columns of a printed measure across all staves: [{ x (px), rel (quarters from measure start) }]
+  function noteColumns(src) {
     const o = scoreOrigin();
-    const staves = o && osmd.GraphicSheet.MeasureList[idx];
+    const staves = o && osmd.GraphicSheet.MeasureList[src];
     if (!staves) return [];
     const cols = new Map();
     for (const gm of staves) {
@@ -2995,6 +3067,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     return [...cols.values()].sort((a, b) => a.rel - b.rel);
   }
 
+  // Boxes of the printed measures, indexed like OSMD's MeasureList (xmlMeasures[i].src)
   function measureBoxes() {
     const o = scoreOrigin();
     if (!o) return [];
@@ -3028,19 +3101,24 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     };
     // Shade [from, to) measure by measure, cutting at note columns inside a measure
     const xAt = (i, pos) => {
-      const m = xmlMeasures[i], b = boxes[i];
+      const m = xmlMeasures[i], b = boxes[m.src];
       if (pos <= m.start + 1e-6) return b.x;
       if (pos >= m.start + m.length - 1e-6) return b.x + b.w;
       // Cut halfway between this note and the one before, so wide lyrics on either side stay clear
-      const cols = noteColumns(i);
+      const cols = noteColumns(m.src);
       const k = cols.findIndex(c => Math.abs(c.rel - (pos - m.start)) < 1e-4);
       if (k === -1) return b.x;
       return k > 0 ? (cols[k - 1].x + cols[k].x) / 2 : cols[k].x - 6;
     };
+    // Both passes of a repeated measure land on the same printed one: draw it once
+    const drawn = new Set();
     const shade = (from, to, cls) => xmlMeasures.forEach((m, i) => {
-      if (!boxes[i] || m.start >= to - 1e-6 || m.start + m.length <= from + 1e-6) return;
+      if (!boxes[m.src] || m.start >= to - 1e-6 || m.start + m.length <= from + 1e-6) return;
       const l = xAt(i, Math.max(from, m.start)), r = xAt(i, Math.min(to, m.start + m.length));
-      add(cls, { ...boxes[i], x: l, w: Math.max(4, r - l) });
+      const key = `${m.src}|${l.toFixed(1)}|${r.toFixed(1)}`;
+      if (drawn.has(key)) return;
+      drawn.add(key);
+      add(cls, { ...boxes[m.src], x: l, w: Math.max(4, r - l) });
     });
     // The loop, or just its first note while the last one is still to be picked
     if (loopFrom !== null) shade(loopFrom, loopTo, "loop-box");
@@ -3054,11 +3132,11 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       d.classList.toggle("to", !joined(d, loopBoxes[i + 1]));
     });
     // The start point rests while a loop is on
-    const sb = !$("loop").checked && boxes[playFrom];
+    const sm = xmlMeasures[playFrom], sb = !$("loop").checked && sm && boxes[sm.src];
     if (sb) {
       // Put the start line at the exact note when the start isn't the measure's first beat
-      const rel = playFromPos - xmlMeasures[playFrom].start;
-      const col = noteColumns(playFrom).find(c => Math.abs(c.rel - rel) < 1e-4);
+      const rel = playFromPos - sm.start;
+      const col = noteColumns(sm.src).find(c => Math.abs(c.rel - rel) < 1e-4);
       add("start-mark", { ...sb, x: col && rel > 1e-4 ? col.x - 6 : sb.x }, { width: "3px" }).innerHTML = "<span>Start</span>";
     }
   }
@@ -3068,11 +3146,12 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     const boxes = measureBoxes();
     const br = $("score").getBoundingClientRect();
     const x = e.clientX - br.left + $("score").scrollLeft, y = e.clientY - br.top + $("score").scrollTop;
-    const idx = boxes.findIndex(b => b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    const src = boxes.findIndex(b => b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    const idx = src === -1 ? -1 : passAt(src);
     if (idx === -1) return null;
-    const cols = noteColumns(idx);
+    const cols = noteColumns(src);
     const near = cols.reduce((a, c) => (!a || Math.abs(c.x - x) < Math.abs(a.x - x) ? c : a), null);
-    return { idx, box: boxes[idx], col: near, pos: near ? xmlMeasures[idx].start + near.rel : null };
+    return { idx, box: boxes[src], col: near, pos: near ? xmlMeasures[idx].start + near.rel : null };
   }
 
   $("score").addEventListener("click", e => {
@@ -3220,9 +3299,9 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
 
   // The printed noteheads for a note at a position
   function scoreHeads(pos, midi) {
-    const idx = measureAt(pos), staves = osmd?.GraphicSheet?.MeasureList[idx];
+    const m = xmlMeasures[measureAt(pos)], staves = m && osmd?.GraphicSheet?.MeasureList[m.src];
     if (!staves) return [];
-    const rel = pos - xmlMeasures[idx].start, out = [];
+    const rel = pos - m.start, out = [];
     for (const gm of staves) for (const se of gm?.staffEntries || []) {
       if (Math.abs(se.relInMeasureTimestamp.RealValue * 4 - rel) > 1e-4) continue;
       for (const gve of se.graphicalVoiceEntries || []) {
@@ -3261,7 +3340,17 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   }
   function paintHits() {
     $("score").querySelectorAll(".vf-notehead.hit, .vf-stavenote.hit").forEach(h => h.classList.remove("hit"));
-    hitNotes.forEach(n => paintHit(n.pos, n.midi));
+    hitNotes.filter(n => trailShown(n.pos)).forEach(n => paintHit(n.pos, n.midi));
+  }
+
+  // The trail is drawn on the printed measures, so inside a repeat only one pass can show at a time:
+  // the latest one the playhead has reached. Coming round again, each measure's old trail clears as you get to it.
+  function trailShown(pos) {
+    const m = xmlMeasures[measureAt(pos)];
+    if (!m || m.passes < 2) return true;
+    const now = playing ? position() : (pausedAt ?? playFromPos);
+    const same = xmlMeasures.filter(x => x.src === m.src);
+    return (same.filter(x => x.start <= now + 1e-6).pop() || same[0]) === m;
   }
 
   // How a wrong key is written in the piece's key signature: { step, octave, sign }.
@@ -3287,15 +3376,17 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     const o = scoreOrigin();
     if (!o) return;
     for (const { pos, midi } of missNotes) {
-      const idx = measureAt(pos), staves = (osmd.GraphicSheet.MeasureList[idx] || []).filter(Boolean);
-      const col = noteColumns(idx).find(c => Math.abs(c.rel - (pos - xmlMeasures[idx].start)) < 1e-4);
+      const m = xmlMeasures[measureAt(pos)];
+      if (!m || !trailShown(pos)) continue;
+      const staves = (osmd.GraphicSheet.MeasureList[m.src] || []).filter(Boolean);
+      const col = noteColumns(m.src).find(c => Math.abs(c.rel - (pos - m.start)) < 1e-4);
       if (!staves.length || !col) continue;
       // One hand practised: its staff. Both: treble from middle C up, bass below
       const hands = practiceHands();
       const upper = hands.length === 1 ? hands[0] === "R" : midi >= 60;
       const gm = upper ? staves[0] : staves[staves.length - 1];
       const top = STAFF_TOP[gm.InitiallyActiveClef?.ClefType] ?? STAFF_TOP[0];
-      const n = ghostNote(midi, xmlMeasures[idx].fifths || 0), d = n.octave * 7 + "CDEFGAB".indexOf(n.step), u = o.u;
+      const n = ghostNote(midi, m.fifths || 0), d = n.octave * 7 + "CDEFGAB".indexOf(n.step), u = o.u;
       const el = document.createElement("div");
       el.className = "miss-note";
       // Origin: the notehead's centre, just right of the printed column
