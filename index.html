@@ -983,7 +983,7 @@
               <button class="icon-btn" data-tip="Advanced settings"><span class="ic" data-ic="gear-six"></span></button>
               <div class="popover">
                 <div class="pop-body settings">
-                  <label class="switch-row"><span>Keep wrong notes<small>Wait mode: red notes stay on the score like the green ones, until Reset. Off: they clear once you get the note right</small></span><input type="checkbox" id="keep-miss" class="switch" checked></label>
+                  <label class="switch-row"><span>Persist wrong notes<small>Wait mode: red notes stay on the score like the green ones, until Reset. Off: they clear once you get the note right</small></span><input type="checkbox" id="persist-miss" class="switch" checked></label>
                   <hr>
                   <label class="switch-row"><span>Forgiving note order<small>Wait mode: a note from the very next step, up to a beat away, also counts if you play it a little early (hands not quite together). Off: notes must come in the written order. Turn this on if correct playing registers as wrong notes at fast speeds</small></span><input type="checkbox" id="forgiving" class="switch"></label>
                 </div>
@@ -3301,7 +3301,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     early = new Set();
     // The next step was played early in full: it's done too
     if (hits.size && steps[stepIdx]?.midis.every(n => hits.has(n))) { stepIdx++; hits = new Set(); }
-    if (!$("keep-miss").checked) { missNotes = []; drawMisses(); }
+    if (!$("persist-miss").checked) { missNotes = []; drawMisses(); }
     if (holdAt !== null) {
       // Restart the clock from where it was waiting
       anchorPos = holdAt;
@@ -3326,18 +3326,19 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // Right notes turn green where they're printed (tied notes included) and stay until Reset, the next Play
   // or the loop coming round.
   // Wrong keys are drawn over the score as red notes beside their column: for as long as the green ones
-  // with "Keep wrong notes" on, else until that step is done.
+  // with "Persist wrong notes" on, else until that step is done.
   // Nothing is re-engraved, so the music never moves.
   let hitNotes = [];  // [{ pos, midi }] notes played right
-  let missNotes = []; // [{ pos, midi }] wrong keys: the whole trail with "Keep wrong notes" on, else the current step's
+  let missNotes = []; // [{ pos, midi }] wrong keys: the whole trail with "Persist wrong notes" on, else the current step's
   $("forgiving").checked = !!ui.forgiving;
   $("forgiving").addEventListener("change", () => { ui.forgiving = $("forgiving").checked; saveUi(); });
-  $("keep-miss").checked = ui.keepMiss !== false;
-  $("keep-miss").addEventListener("change", () => {
-    ui.keepMiss = $("keep-miss").checked;
+  if (ui.persistMiss === undefined && ui.keepMiss !== undefined) { ui.persistMiss = ui.keepMiss; delete ui.keepMiss; saveUi(); } // setting renamed
+  $("persist-miss").checked = ui.persistMiss !== false;
+  $("persist-miss").addEventListener("change", () => {
+    ui.persistMiss = $("persist-miss").checked;
     saveUi();
     // Turned off: only the step being waited on keeps its red notes
-    if (!ui.keepMiss) { missNotes = missNotes.filter(x => x.pos === steps[stepIdx]?.onset); drawMisses(); }
+    if (!ui.persistMiss) { missNotes = missNotes.filter(x => x.pos === steps[stepIdx]?.onset); drawMisses(); }
   });
 
   // The printed noteheads for a note at a position
