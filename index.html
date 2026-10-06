@@ -24,6 +24,7 @@
     --black-key: #1f1f22;
     --key-on: #2f6fde;
     --play: #ee8a1f;
+    --play-lh: #1a9aa8;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
     --kb-h: 150px;
   }
@@ -153,6 +154,7 @@
   .mini-staff svg { display: block; }
   .mini-staff.on .vf-stavenote path, .mini-staff.mix .vf-notehead.sel path { fill: var(--key-on); stroke: var(--key-on); }
   .mini-staff.playing .vf-stavenote path, .mini-staff.mix .vf-notehead.play path { fill: var(--play); stroke: var(--play); }
+  .mini-staff.playing-lh .vf-stavenote path, .mini-staff.mix .vf-notehead.playl path { fill: var(--play-lh); stroke: var(--play-lh); }
   .mini-staff.mix .vf-notehead.good path { fill: #2e9e6a; stroke: #2e9e6a; }
   .mini-staff.mix .vf-notehead.bad path { fill: #d64545; stroke: #d64545; }
   .mini-staff .ottava { position: absolute; right: 7px; font: italic 600 0.68rem Georgia, serif; color: #555; }
@@ -177,6 +179,8 @@
   .key.white.target, .key.black.target { background: var(--play); border-color: var(--play); animation: pulse 0.8s ease-in-out infinite alternate; }
   @keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.3); } }
   .key.white.playing, .key.black.playing { background: var(--oc); border-color: var(--oc); }
+  /* Left-hand notes show in teal instead of orange, so the hands can be told apart */
+  .key.lh { --play: var(--play-lh); }
   /* A note still sounding after its start fades to pale orange: keep it down, don't strike it again */
   .key.white.held:not(.target) { --oc: color-mix(in srgb, var(--play) 40%, var(--white-key)); }
   .key.black.held:not(.target) { --oc: color-mix(in srgb, var(--play) 45%, var(--black-key)); }
@@ -202,7 +206,7 @@
   .key.hl .lbl { color: #2a1747; font-weight: 600; }
   .key.black.hl .lbl, .key.hl.tonic .lbl, .key.on .lbl, .key.playing .lbl, .key.target .lbl,
   .key.good .lbl, .key.bad .lbl { color: #fff; font-weight: 600; }
-  .key.white.held:not(.target, .good, .bad, .on) .lbl { color: #7a3f00; }
+  .key.white.held:not(.target, .good, .bad, .on) .lbl { color: color-mix(in srgb, var(--play) 55%, #000); }
 
   /* ---------- Views ---------- */
   .views-area { min-height: 0; }
@@ -1269,6 +1273,7 @@
   let playingMidis = new Set(); // keys sounding during sheet music playback
   let heldMidis = new Set();    // those past their start: still held, not struck again
   let targetMidis = new Set();  // keys to play next in Wait mode
+  let leftMidis = new Set();    // those lit by the left hand alone, shown teal (a key both hands play is orange)
   let overlay = null; // { label, pcs: Set<chroma> | null, midis: Set<midi> | null, tonic: chroma | null }
 
   const $ = id => document.getElementById(id);
@@ -1658,8 +1663,8 @@
   }
 
   // ---------- Mini staff ----------
-  // A small grand staff beside the piano showing what's sounding: playback (orange), else the
-  // selection (blue), else the key just pressed (black, for a moment). Middle C and up go on the
+  // A small grand staff beside the piano showing what's sounding: playback (orange, teal for the
+  // left hand), else the selection (blue), else the key just pressed (black, for a moment). Middle C and up go on the
   // treble staff, the rest on the bass staff. Drawn with the same engraver as the sheet music.
   const miniEl = $("mini-staff");
   const MINI_ZOOM = 0.75, MINI_TOP = 30; // px from the top of the box to the top staff line
@@ -1717,14 +1722,15 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     if (miniEl.hidden || !miniEl.offsetParent || !window.opensheetmusicdisplay || miniBusy) return;
     // Pressed keys are drawn with the selection, or in Wait mode with the notes playing. Each note
     // gets a tone: green / red for a Wait mode answer, black for any other press (also when it's
-    // part of the selection, so you can see it register), else orange (playing) or blue (selected)
+    // part of the selection, so you can see it register), else orange / teal (playing, right / left
+    // hand) or blue (selected)
     const sounding = playingMidis.size > 0, withPressed = !sounding || $("wait").checked;
     const set = new Set([...(sounding ? playingMidis : selected), ...(withPressed ? pressed : [])]);
     const midis = [...set].sort((a, b) => a - b);
-    const tone = m => withPressed && pressed.has(m) ? judged.get(m) || "" : sounding ? "play" : "sel";
+    const tone = m => withPressed && pressed.has(m) ? judged.get(m) || "" : sounding ? (leftMidis.has(m) ? "playl" : "play") : "sel";
     const tones = midis.map(tone);
     // One tone throughout colours the whole staff; otherwise each notehead is coloured ("mix")
-    const cls = tones.some(t => t !== tones[0]) || ["good", "bad"].includes(tones[0]) ? "mix" : { play: "playing", sel: "on" }[tones[0]] || "";
+    const cls = tones.some(t => t !== tones[0]) || ["good", "bad"].includes(tones[0]) ? "mix" : { play: "playing", playl: "playing-lh", sel: "on" }[tones[0]] || "";
     const treble = miniStaffPart(midis.filter(m => m >= 60), true), bass = miniStaffPart(midis.filter(m => m < 60), false);
     const xml = miniXml(treble.notes, bass.notes);
     const state = xml + cls + (cls === "mix" ? tones : "");
@@ -1791,6 +1797,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       el.classList.toggle("held", playing && heldMidis.has(m));
       const target = targetMidis.has(m);
       el.classList.toggle("target", target);
+      el.classList.toggle("lh", (playing || target) && leftMidis.has(m));
       let label = "";
       if (on || hl || playing || target) label = pc(m);
       else if (m % 12 === 0) label = "C" + octaveOf(m);
@@ -2102,13 +2109,12 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   function unrollRepeats(order) {
     const n = printedMeasures.length;
     if (order) {
-      // The cursor only stops where there are notes or rests, so a bar with nothing in it is skipped: put it back
-      order = order.flatMap((i, k) => {
-        const prev = k ? order[k - 1] : -1;
-        return i > prev + 1 ? Array.from({ length: i - prev }, (_, j) => prev + 1 + j) : [i];
-      });
-      const last = order[order.length - 1];
-      for (let i = last + 1; i < n; i++) order.push(i);
+      // The cursor only stops where there are notes or rests, so a bar with nothing in it is never visited: put it
+      // back where it belongs. A bar skipped on one pass but played on another (a 1st ending) is left alone.
+      const visited = new Set(order);
+      const missing = (from, to) => Array.from({ length: Math.max(0, to - from) }, (_, j) => from + j).filter(i => !visited.has(i));
+      order = order.flatMap((i, k) => [...missing(k ? order[k - 1] + 1 : 0, i), i]);
+      order.push(...missing(order[order.length - 1] + 1, n));
     }
     const ok = order && order.every(i => i >= 0 && i < n) && new Set(order).size === n;
     if (!ok) order = printedMeasures.map((_, i) => i);
@@ -2774,28 +2780,32 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     setPlayState("play");
     holdAt = null;
     targetMidis = new Set();
-    if (was) { playingMidis = new Set(); heldMidis = new Set(); renderKeys(); markNow(null); }
+    if (was) { playingMidis = new Set(); heldMidis = new Set(); leftMidis = new Set(); renderKeys(); markNow(null); }
   }
 
   // Visual update each frame: light up sounding keys and the current measure/chord
   function tick() {
     if (!playing) return;
     const pos = position();
-    const now = new Set(), held = new Set();
+    const now = new Set(), held = new Set(), left = new Set(), right = new Set();
     const struck = 0.2 / secPerQ(); // a note shows as struck for its first 200 ms, then as held
     for (const n of timeline) {
       if (n.onset > pos) break;
       if (pos >= n.onset + n.dur) continue;
       now.add(n.midi);
+      (n.hand === "L" ? left : right).add(n.midi);
       // The latest note on a key decides, so a repeat shows as a new strike
       if (pos - n.onset > struck) held.add(n.midi); else held.delete(n.midi);
     }
     const targets = currentTargets();
-    const key = [...now].join(",") + "|" + [...held].join(",") + "|" + [...targets].join(",");
-    if (key !== [...playingMidis].join(",") + "|" + [...heldMidis].join(",") + "|" + [...targetMidis].join(",")) {
+    if (targets.size) for (const m of targets) (steps[stepIdx].right.has(m) ? right : left).add(m);
+    for (const m of right) left.delete(m);
+    const key = [...now].join(",") + "|" + [...held].join(",") + "|" + [...targets].join(",") + "|" + [...left].join(",");
+    if (key !== [...playingMidis].join(",") + "|" + [...heldMidis].join(",") + "|" + [...targetMidis].join(",") + "|" + [...leftMidis].join(",")) {
       playingMidis = now;
       heldMidis = held;
       targetMidis = targets;
+      leftMidis = left;
       renderKeys();
     }
     markNow(pos);
@@ -2841,15 +2851,17 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // views use the piano for their own things.
   function lightPlayhead(pos) {
     if (playing) { renderKeys(); return; } // the clock lights the keys itself
-    let midis = new Set();
     const sheet = document.querySelector(".app").classList.contains("sheet-view");
     const hands = $("wait").checked ? practiceHands() : ["L", "R"];
     const next = sheet ? timeline.find(n => n.onset >= pos - 1e-6 && hands.includes(n.hand)) : null;
-    if (next) midis = new Set(timeline.filter(n => Math.abs(n.onset - next.onset) < 1e-6 && hands.includes(n.hand)).map(n => n.midi));
+    const notes = next ? timeline.filter(n => Math.abs(n.onset - next.onset) < 1e-6 && hands.includes(n.hand)) : [];
+    const midis = new Set(notes.map(n => n.midi));
     const wait = $("wait").checked;
     playingMidis = wait ? new Set() : midis;
     heldMidis = new Set();
     targetMidis = wait ? midis : new Set();
+    leftMidis = new Set(notes.filter(n => n.hand === "L").map(n => n.midi));
+    notes.forEach(n => { if (n.hand === "R") leftMidis.delete(n.midi); });
     renderKeys();
   }
 
@@ -3270,7 +3282,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // ---------- Wait mode (practice) ----------
   // The playhead stops at each note of the practice hand(s) until you play it,
   // on the on-screen piano or a MIDI keyboard.
-  let steps = [];      // [{ onset, midis: [...] }] notes you have to play, grouped by onset
+  let steps = [];      // [{ onset, midis: [...], right: Set }] notes you have to play, grouped by onset (right: those the right hand plays)
   let stepIdx = 0;
   let hits = new Set(); // notes of the current step already played
   let early = new Set(); // notes of the next step played ahead of time (Forgiving note order)
@@ -3285,9 +3297,10 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     const hands = practiceHands();
     for (const n of timeline) {
       if (!hands.includes(n.hand)) continue;
-      const last = steps[steps.length - 1];
+      let last = steps[steps.length - 1];
       if (last && Math.abs(last.onset - n.onset) < 1e-6) { if (!last.midis.includes(n.midi)) last.midis.push(n.midi); }
-      else steps.push({ onset: n.onset, midis: [n.midi] });
+      else steps.push(last = { onset: n.onset, midis: [n.midi], right: new Set() });
+      if (n.hand === "R") last.right.add(n.midi);
     }
   }
 
