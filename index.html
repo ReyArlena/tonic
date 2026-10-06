@@ -2819,7 +2819,9 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // Visual update each frame: light up sounding keys and the current measure/chord
   function tick() {
     if (!playing) return;
-    const pos = position();
+    // The clock can pass the loop end between two scheduler runs: don't step the cursor (and scroll) past it
+    const range = loopRange();
+    const pos = range ? Math.min(position(), range.to - 1e-6) : position();
     const now = new Set(), held = new Set(), left = new Set(), right = new Set();
     const struck = 0.2 / secPerQ(); // a note shows as struck for its first 200 ms, then as held
     for (const n of timeline) {
@@ -4536,7 +4538,9 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
     $("midi").dataset.tip = connected ? text : text + " Click to connect a MIDI keyboard (Chrome or Edge).";
   }
   function attachInputs(access) {
-    const inputs = [...access.inputs.values()];
+    // Chrome keeps unplugged ports in the list as "disconnected": only live ones count.
+    // Linux always has a virtual "Midi Through" loopback port, which is not a keyboard
+    const inputs = [...access.inputs.values()].filter(i => i.state === "connected" && !/midi through/i.test(i.name));
     inputs.forEach(i => i.onmidimessage = onMidiMessage);
     // A MIDI keyboard can reach any key (its size isn't reported), so show the full piano
     if (inputs.length) fitPiano(...PIANO_RANGES["88"]);
