@@ -2786,7 +2786,9 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // Visual update each frame: light up sounding keys and the current measure/chord
   function tick() {
     if (!playing) return;
-    const pos = position();
+    // The clock can pass the loop end between two scheduler runs: don't step the cursor (and scroll) past it
+    const range = loopRange();
+    const pos = range ? Math.min(position(), range.to - 1e-6) : position();
     const now = new Set(), held = new Set(), left = new Set(), right = new Set();
     const struck = 0.2 / secPerQ(); // a note shows as struck for its first 200 ms, then as held
     for (const n of timeline) {
