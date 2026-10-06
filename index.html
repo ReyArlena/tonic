@@ -4286,7 +4286,9 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
     $("midi").dataset.tip = connected ? text : text + " Click to connect a MIDI keyboard (Chrome or Edge).";
   }
   function attachInputs(access) {
-    const inputs = [...access.inputs.values()];
+    // Chrome keeps unplugged ports in the list as "disconnected": only live ones count.
+    // Linux always has a virtual "Midi Through" loopback port, which is not a keyboard
+    const inputs = [...access.inputs.values()].filter(i => i.state === "connected" && !/midi through/i.test(i.name));
     inputs.forEach(i => i.onmidimessage = onMidiMessage);
     // A MIDI keyboard can reach any key (its size isn't reported), so show the full piano
     if (inputs.length) fitPiano(...PIANO_RANGES["88"]);
