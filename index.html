@@ -2915,10 +2915,17 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // Loop on: pick its two ends. Loop off (or Cancel / Esc while picking): the section is cleared.
   $("loop").addEventListener("change", () => {
     if ($("loop").checked && !xmlMeasures.length) $("loop").checked = false;
-    const had = loopFrom !== null && loopTo !== null;
+    // The box is already unchecked here, so loopRange() is gone: a playhead resting at the loop start is at loopFrom
+    const had = loopFrom !== null && loopTo !== null, at = playing ? position() : (pausedAt ?? loopFrom ?? 0);
     clearLoop();
     if ($("loop").checked) setPickMode("start");
-    else if (had) resetAndGo(); // the section is gone: back to the start, count and trail cleared
+    // The section is gone: the trail and count clear like on Reset, but the playhead stays where it was, playing on
+    // past the old end or resting at the same spot (now a paused position, since the start is no longer the loop start)
+    else if (had) {
+      resetStats();
+      if (!playing) { pausedAt = at; setPlayState("resume"); }
+      updatePlayhead();
+    }
   });
   function cancelLoopPick() {
     $("loop").checked = false;
