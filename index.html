@@ -850,7 +850,7 @@
       <div class="sheet-main">
         <div class="sheet-toolbar">
           <button id="open-file" class="icon-btn labelled" data-tip="My sheet music: open a saved sheet or add a new file"><span class="ic" data-ic="folder-open"></span>Open</button>
-          <input type="file" id="xml-file" accept=".musicxml,.xml" hidden>
+          <input type="file" id="xml-file" accept=".musicxml,.xml,.mxl" hidden>
           <span class="sheet-title" id="sheet-title"></span>
           <span class="sheet-key" id="sheet-key"></span>
           <span class="spacer"></span>
@@ -993,11 +993,11 @@
             <h2>My sheet music</h2>
             <button class="icon-btn small" id="lib-close" data-tip="Close (Esc)"><span class="ic" data-ic="x"></span></button>
           </div>
-          <button class="lib-add" id="lib-add" data-tip="Choose a MusicXML file (.musicxml / .xml) to save a copy here and open it">
+          <button class="lib-add" id="lib-add" data-tip="Choose a MusicXML file (.musicxml, .xml or .mxl) to save a copy here and open it">
             <span class="ic" data-ic="plus-circle"></span>Add new file
           </button>
           <p class="lib-note"><span class="ic" data-ic="info"></span><span>Adding a file saves a copy of the sheet music in this browser. It isn't linked to the original file, so if you edit it elsewhere (e.g. MuseScore), add it again. Clearing this browser's site data removes the saved copies.</span></p>
-          <p class="lib-note"><span class="ic" data-ic="info"></span><span>Uncompressed MusicXML only (.musicxml / .xml, not .mxl). In MuseScore: File, Export, MusicXML, uncompressed.</span></p>
+          <p class="lib-note"><span class="ic" data-ic="info"></span><span>MusicXML files: .musicxml, .xml, or compressed .mxl (MuseScore's default export and musescore.com downloads). A compressed file is unpacked as it is added.</span></p>
           <label class="lib-search"><span class="ic" data-ic="magnifying-glass"></span><input type="search" id="lib-search" placeholder="Search"></label>
           <div class="lib-msg" id="lib-msg"></div>
           <div class="lib-list" id="lib-list"></div>
@@ -2436,11 +2436,11 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // Add a file: check it reads as MusicXML, save a copy (never replacing), then open it
   async function addFile(file) {
     try {
-      const text = await file.text();
+      const text = await readSheetFile(file);
       parseMusicXML(text);
       await refreshLibrary();
       const now = new Date().toISOString();
-      const rec = { name: uniqueName(file.name.replace(/\.(musicxml|xml)$/i, "") || "Untitled"), added: now, opened: now, text };
+      const rec = { name: uniqueName(file.name.replace(/\.(musicxml|xml|mxl)$/i, "") || "Untitled"), added: now, opened: now, text };
       rec.id = await putSheet(rec);
       navigator.storage?.persist?.().catch(() => {});
       sheets.push(rec);
@@ -2509,6 +2509,54 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       if (id === currentSheetId) $("sheet-title").textContent = rec.name;
     }
     renderLibrary();
+  }
+
+  // The text of a MusicXML file, unpacking a compressed .mxl (a zip, "PK" at the start, whatever the extension)
+  async function readSheetFile(file) {
+    const buf = await file.arrayBuffer();
+    const head = new Uint8Array(buf, 0, Math.min(2, buf.byteLength));
+    return head[0] === 0x50 && head[1] === 0x4b ? readMxl(buf) : new TextDecoder().decode(buf);
+  }
+
+  // .mxl: META-INF/container.xml names the score file inside the zip. The central directory is read by hand and
+  // entries inflated with the browser's own DecompressionStream, so no zip library is needed.
+  async function readMxl(buf) {
+    const dv = new DataView(buf), bytes = new Uint8Array(buf), utf8 = new TextDecoder();
+    // The end-of-central-directory record sits at the very end, before a comment of variable length
+    let eocd = -1;
+    for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65557); i--) {
+      if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    }
+    if (eocd === -1) throw new Error("not a valid .mxl (zip) file");
+    const count = dv.getUint16(eocd + 10, true);
+    const entries = new Map();
+    for (let i = 0, p = dv.getUint32(eocd + 16, true); i < count; i++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) throw new Error("damaged .mxl file");
+      const nameLen = dv.getUint16(p + 28, true), extraLen = dv.getUint16(p + 30, true), commentLen = dv.getUint16(p + 32, true);
+      entries.set(utf8.decode(bytes.subarray(p + 46, p + 46 + nameLen)), {
+        method: dv.getUint16(p + 10, true), size: dv.getUint32(p + 20, true), offset: dv.getUint32(p + 42, true),
+      });
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    const read = async name => {
+      const e = entries.get(name);
+      if (!e) throw new Error(`${name} is missing from the .mxl`);
+      const start = e.offset + 30 + dv.getUint16(e.offset + 26, true) + dv.getUint16(e.offset + 28, true);
+      const data = bytes.subarray(start, start + e.size);
+      if (e.method === 0) return utf8.decode(data);
+      if (e.method !== 8) throw new Error("the .mxl uses a compression this app can't read");
+      if (!window.DecompressionStream) throw new Error("this browser can't unpack .mxl files; export uncompressed MusicXML instead");
+      return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+    };
+    let path = null;
+    if (entries.has("META-INF/container.xml")) {
+      const doc = new DOMParser().parseFromString(await read("META-INF/container.xml"), "application/xml");
+      path = doc.querySelector("rootfile")?.getAttribute("full-path");
+    }
+    // No container: take the first score-looking file outside META-INF
+    path ||= [...entries.keys()].find(n => /\.(musicxml|xml)$/i.test(n) && !n.startsWith("META-INF/"));
+    if (!path) throw new Error("no score found inside the .mxl");
+    return read(path);
   }
 
   $("xml-file").addEventListener("change", e => {
