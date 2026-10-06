@@ -467,7 +467,6 @@
   .measure { border: 1px solid var(--border); border-radius: 10px; padding: 5px 8px; cursor: pointer; background: var(--panel-2); }
   .measure .mnum { font-size: 0.72rem; color: var(--muted); }
   .measure .chips { gap: 4px; }
-  .measure.start { border-color: var(--accent); }
   .measure.now { background: var(--accent-soft); }
   .measure.inloop { background: rgba(238, 138, 31, 0.14); }
   .chip.now { background: var(--play); color: #fff; }
@@ -558,10 +557,8 @@
   .chip-info .ic { width: 15px; height: 15px; }
   button.chip-info { border: 1px solid transparent; cursor: pointer; }
   @media (hover: hover) { button.chip-info:hover { border-color: var(--accent); color: var(--text); } }
-  /* The start point chip is blue like its line on the score; it rests while a loop is on */
-  .chip-info.reset-start { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-  @media (hover: hover) { button.chip-info.reset-start:hover { color: var(--accent); } }
-  .chip-info.reset-start:disabled { opacity: 0.4; cursor: default; border-color: transparent; }
+  /* The playhead chip is orange like the playhead on the score */
+  .chip-info.playhead { background: color-mix(in srgb, var(--play) 18%, transparent); color: var(--play); font-weight: 600; }
   .chip-info.stats { color: var(--text); font-weight: 600; }
   .chip-info.stats.empty { display: none; }
   /* The loop's range, orange like its box on the score */
@@ -629,7 +626,7 @@
   .loop-box.to { border-bottom-right-radius: 4px; }
   .loop-box.from::before { border-top-left-radius: 4px; }
   .loop-box.to::before { border-top-right-radius: 4px; }
-  .loop-box span, .start-mark span {
+  .loop-box span {
     position: absolute; bottom: 100%; font: 600 11px/16px system-ui, sans-serif; white-space: nowrap; color: #fff;
   }
   .loop-box span { left: 0; padding: 0 6px; display: flex; align-items: center; gap: 4px; }
@@ -642,8 +639,6 @@
   .miss-note i { position: absolute; background: #d64545; }
   .miss-note i.head { border-radius: 50%; transform: rotate(-20deg); }
   .miss-note b { position: absolute; color: #d64545; font: 400 1px/1 serif; transform: translate(-100%, -50%); }
-  .start-mark { position: absolute; width: 3px; border-radius: 0 0 2px 2px; background: var(--accent); pointer-events: none; }
-  .start-mark span { left: 50%; transform: translateX(-50%); background: var(--accent); padding: 0 6px; border-radius: 4px; }
   /* What to click next while picking a loop, floating over the score */
   .loop-pick {
     position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5;
@@ -893,10 +888,10 @@
           <div class="playbar-inner">
             <div class="group">
               <button id="xml-play" class="play-btn" data-tip="Play"><span class="ic" data-ic="play"></span></button>
-              <button id="xml-stop" class="icon-btn" data-tip="Reset: stop, go back to the start point (or the loop start) and clear the correct/wrong count"><span class="ic" data-ic="arrow-counter-clockwise"></span></button>
-              <button class="chip-info reset-start" id="reset-start" data-tip="Start point: the blue line on the score, where Play begins. Click a note to move it. Click here to send it back to the start of the song">
-                <span class="ic" data-ic="map-pin"></span><span id="play-from"></span>
-              </button>
+              <button id="xml-stop" class="icon-btn" data-tip="Reset: stop, go back to the start (or the loop start) and clear the correct/wrong count"><span class="ic" data-ic="arrow-counter-clockwise"></span></button>
+              <span class="chip-info playhead" data-tip="Playhead: the orange bar on the score, where Play continues from. Click a note on the score or a measure in the list to move it">
+                <span class="ic" data-ic="map-pin"></span><span id="playhead-pos"></span>
+              </span>
             </div>
 
             <div class="divider"></div>
@@ -2130,7 +2125,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
 
   // A printed measure inside a repeat is played more than once: the pass nearest the playhead
   function passAt(src) {
-    const ref = playing ? position() : (pausedAt ?? playFromPos);
+    const ref = playhead();
     let best = -1;
     xmlMeasures.forEach((m, i) => {
       if (m.src === src && (best === -1 || Math.abs(m.start - ref) < Math.abs(xmlMeasures[best].start - ref))) best = i;
@@ -2275,7 +2270,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
         if (prev && sym && prev.sym === sym) { prev.notes = prev.notes.concat(notes); prev.end = (s + 1) * segLen; continue; }
         segs.push({ sym, fit, notes, start: s * segLen, end: (s + 1) * segLen });
       }
-      html += `<div class="measure${idx === playFrom ? " start" : ""}" data-measure="${idx}"><div class="mnum">${esc(mLabel(m))}</div><div class="chips">` +
+      html += `<div class="measure" data-measure="${idx}"><div class="mnum">${esc(mLabel(m))}</div><div class="chips">` +
         segs.map((s, k) => s.sym
           ? chip(s.sym, `data-seg="${idx}|${k}"`)
           : `<span class="chip" data-segi="${idx}|${k}">${s.notes.length ? [...new Set(s.notes.map(n => pc(n.midi)))].join(" ") : "rest"}</span>`).join("") +
@@ -2299,8 +2294,6 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       unrollRepeats(null); // printed order until the score is engraved
       stopPlayback();
       clearTrail();
-      playFrom = 0;
-      playFromPos = 0;
       loopFrom = loopTo = loopFirst = null;
       loopPick = null;
       $("loop").checked = false;
@@ -2316,7 +2309,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       buildTimeline();
       if (songRange) fitPiano(...songRange);
       renderSheet();
-      updatePlayFrom();
+      updatePlayhead();
       applySongKey();
     }
   }
@@ -2591,7 +2584,6 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // ---------- Sheet music playback ----------
   let timeline = [];       // notes with absolute onset/dur in quarter notes, ties merged
   let totalLen = 0;
-  let playFrom = 0;        // measure index playback starts from
   let tempo = 100;
   let playing = false;
   let anchorPos = 0, anchorTime = 0; // playhead position (quarters) at audio time anchorTime
@@ -2720,6 +2712,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     cancelAnimationFrame(rafId);
     haltAudio();
     setPlayState("resume");
+    updatePlayhead();
   }
   let pausedAt = null;
 
@@ -2759,6 +2752,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     }
     markNow(pos);
     moveCursor(pos);
+    updatePlayhead();
     rafId = requestAnimationFrame(tick);
   }
 
@@ -2783,13 +2777,14 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     document.querySelector(`[data-seg="${mi}|${si}"], [data-segi="${mi}|${si}"]`)?.classList.add("now");
   }
 
-  function updatePlayFrom() {
-    const m = xmlMeasures[playFrom];
-    const beat = m ? beatOf(m, playFromPos) : 1;
-    $("play-from").textContent = m ? `${mLabel(m)}/b${+beat.toFixed(2)}` : "";
-    document.querySelectorAll(".measure").forEach(x => x.classList.toggle("start", +x.dataset.measure === playFrom));
-    if (!playing && m) moveCursor(playFromPos);
-    drawScoreMarks();
+  // The playhead chip: whole beats while playing, the exact note position when stopped on one
+  function updatePlayhead() {
+    const pos = playhead(), m = xmlMeasures[measureAt(pos)];
+    if (m) {
+      const beat = beatOf(m, pos);
+      $("playhead-pos").textContent = `${mLabel(m)}/b${playing ? Math.floor(beat + 1e-6) : +beat.toFixed(2)}`;
+    }
+    if (!playing) { moveCursor(pos); drawScoreMarks(); }
   }
 
   $("xml-play").addEventListener("click", () => {
@@ -2808,7 +2803,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   function resetPlayback() {
     stopPlayback();
     resetStats();
-    moveCursor(startPos());
+    updatePlayhead();
   }
   $("xml-stop").addEventListener("click", resetPlayback);
   // Reset, then in Wait mode start again straight away (it stops at the first note anyway)
@@ -2816,37 +2811,19 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     resetPlayback();
     if ($("wait").checked) $("xml-play").click();
   }
-  $("reset-start").addEventListener("click", () => {
-    if (!xmlMeasures.length) return;
-    playFrom = 0;
-    playFromPos = 0;
-    updatePlayFrom();
-    if (playing) { haltAudio(); startAt(0); }
-    else if (pausedAt !== null) pausedAt = 0;
-  });
   $("tempo").addEventListener("input", e => setTempo(+e.target.value));
 
-  // Clicking a measure (chip grid or score) sets the start point and jumps there if playing.
-  // In "Set loop" mode the first click picks the loop start and the second its end.
-  // pos (quarter notes) is an exact note position from a score click; chips use the measure start
+  // Clicking a measure (chip grid or score) moves the playhead there: playback jumps, or Play will continue from it.
+  // With a loop on, clicks outside the loop do nothing. In "Set loop" mode the first click picks the loop start
+  // and the second its end. pos (quarter notes) is an exact note position from a score click; chips use the measure start
   function handleMeasureClick(idx, pos = null) {
     if (loopPick) { pickLoop(idx, pos); return; }
-    // With a loop on, the start point rests: a click inside the loop just jumps the playhead there
-    const range = loopRange();
-    if (range) {
-      const at = pos ?? xmlMeasures[idx].start;
-      if (at < range.from - 1e-6 || at >= range.to - 1e-6) return;
-      if (playing) { haltAudio(); startAt(at); }
-      else { pausedAt = at; moveCursor(at); setPlayState("resume"); }
-      return;
-    }
-    playFrom = idx;
-    playFromPos = pos ?? xmlMeasures[idx].start;
-    updatePlayFrom();
-    if (playing) { haltAudio(); startAt(playFromPos); }
-    else if (pausedAt !== null) pausedAt = playFromPos;
+    const range = loopRange(), at = pos ?? xmlMeasures[idx].start;
+    if (range && (at < range.from - 1e-6 || at >= range.to - 1e-6)) return;
+    if (playing) { haltAudio(); startAt(at); }
+    else { pausedAt = at; setPlayState("resume"); }
+    updatePlayhead();
   }
-  let playFromPos = 0;
   document.addEventListener("click", e => {
     const meas = e.target.closest("[data-measure]");
     if (meas) handleMeasureClick(+meas.dataset.measure);
@@ -2865,8 +2842,10 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     if (!$("loop").checked || loopFrom === null || loopTo === null || !xmlMeasures.length) return null;
     return { from: loopFrom, to: loopTo };
   }
-  // Where Play and Reset start from: the loop start, else the start point (blue line)
-  const startPos = () => loopRange()?.from ?? playFromPos;
+  // Where Play and Reset start from: the loop start, else the beginning
+  const startPos = () => loopRange()?.from ?? 0;
+  // Where the playhead is: the music playing, else where it was paused or clicked, else the start
+  const playhead = () => playing ? position() : (pausedAt ?? startPos());
 
   // A clicked point covers one note (score) or a whole measure (chip)
   function pickPoint(idx, pos) {
@@ -2926,7 +2905,6 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     $("loop-pick").hidden = !loopPick;
     $("loop-pick-text").textContent = loopPick === "start" ? "Loop: click the first note" : "Loop: click the last note";
     $("loop-info").textContent = loopRange() ? `${fmtPos(loopFrom)} to ${loopEndLabel}` : "";
-    $("reset-start").disabled = $("loop").checked;
     document.querySelectorAll(".measure").forEach(x => {
       const m = xmlMeasures[+x.dataset.measure];
       x.classList.toggle("inloop", loopFrom !== null && m.start < loopTo - 1e-6 && m.start + m.length > loopFrom + 1e-6);
@@ -2940,7 +2918,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     const had = loopFrom !== null && loopTo !== null;
     clearLoop();
     if ($("loop").checked) setPickMode("start");
-    else if (had) resetAndGo(); // the section is gone: back to the start point, count and trail cleared
+    else if (had) resetAndGo(); // the section is gone: back to the start, count and trail cleared
   });
   function cancelLoopPick() {
     $("loop").checked = false;
@@ -2978,7 +2956,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     cursorRuns = walkCursor();
     unrollRepeats(playingOrder());
     indexCursor(cursorRuns);
-    moveCursor(playFromPos);
+    moveCursor(playhead());
     setPickMode(loopPick);
   }
 
@@ -2993,15 +2971,13 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     if (!osmd || !printedMeasures.length) return;
     stopPlayback();
     clearTrail();
-    playFrom = 0;
-    playFromPos = 0;
     $("loop").checked = false;
     clearLoop();
     unrollRepeats(playingOrder());
     indexCursor(cursorRuns);
     buildTimeline();
     renderSheet();
-    updatePlayFrom();
+    updatePlayhead();
     moveCursor(0);
   });
 
@@ -3078,7 +3054,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       if (!scoreWidth) return;
       osmd.render();
       indexCursor();
-      moveCursor(playing ? position() : playFromPos);
+      moveCursor(playhead());
       drawScoreMarks();
     }, 150);
   }
@@ -3130,7 +3106,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
 
   function drawScoreMarks() {
     const box = $("score");
-    box.querySelectorAll(".loop-box, .start-mark").forEach(x => x.remove());
+    box.querySelectorAll(".loop-box").forEach(x => x.remove());
     paintHits();
     drawMisses();
     const boxes = measureBoxes();
@@ -3174,14 +3150,6 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       d.classList.toggle("from", !joined(loopBoxes[i - 1], d));
       d.classList.toggle("to", !joined(d, loopBoxes[i + 1]));
     });
-    // The start point rests while a loop is on
-    const sm = xmlMeasures[playFrom], sb = !$("loop").checked && sm && boxes[sm.src];
-    if (sb) {
-      // Put the start line at the exact note when the start isn't the measure's first beat
-      const rel = playFromPos - sm.start;
-      const col = noteColumns(sm.src).find(c => Math.abs(c.rel - rel) < 1e-4);
-      add("start-mark", { ...sb, x: col && rel > 1e-4 ? col.x - 6 : sb.x }, { width: "3px" }).innerHTML = "<span>Start</span>";
-    }
   }
 
   // Which measure and nearest note column a mouse event is over
@@ -3392,7 +3360,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   function trailShown(pos) {
     const m = xmlMeasures[measureAt(pos)];
     if (!m || m.passes < 2) return true;
-    const now = playing ? position() : (pausedAt ?? playFromPos);
+    const now = playhead();
     const same = xmlMeasures.filter(x => x.src === m.src);
     return (same.filter(x => x.start <= now + 1e-6).pop() || same[0]) === m;
   }
@@ -3579,7 +3547,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   function setPlayState(state) {
     const btn = $("xml-play");
     setIcon(btn.querySelector(".ic"), state === "pause" ? "pause" : "play");
-    btn.dataset.tip = state === "pause" ? "Pause" : state === "resume" ? "Resume" : "Play from the start point";
+    btn.dataset.tip = state === "pause" ? "Pause" : state === "resume" ? "Resume" : "Play from the start";
   }
   setPlayState("play");
 
