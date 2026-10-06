@@ -337,7 +337,19 @@
   details:not([open]) > summary.pane-head { border-bottom: none; border-radius: 13px; }
   /* The note you got right turns green; a wrong key shows as a red note beside it */
   .sight-staff.good .vf-stavenote:not(.wrong) path { fill: #2e9e6a; stroke: #2e9e6a; }
-  .sight-staff .vf-stavenote.wrong path, .sight-staff.miss .vf-stavenote path { fill: #d64545; stroke: #d64545; }
+  .sight-staff .vf-stavenote.wrong path { fill: #d64545; stroke: #d64545; }
+  /* A wrong key too far outside the clef to draw flashes a red arrow at the staff's top or bottom edge
+     instead, like the piano's off-screen arrows */
+  .sight-arrow {
+    position: absolute; left: 50%; z-index: 5; width: 48px; height: 40px; margin-left: -24px; border-radius: 10px;
+    display: grid; place-items: center; background: #e5383b; color: #fff; opacity: 0; pointer-events: none;
+    box-shadow: 0 0 0 2px #fff, 0 4px 14px rgba(0, 0, 0, 0.4);
+  }
+  .sight-arrow.up { top: 8px; }
+  .sight-arrow.down { bottom: 8px; }
+  .sight-arrow .ic { width: 26px; height: 26px; display: block; }
+  .sight-arrow.up .ic { transform: rotate(180deg); }
+  .sight-arrow.flash { animation: kb-arrow-flash 0.6s ease-out; }
 
   /* Test progress (ear training and sight reading) */
   .view-ear, .view-sight { gap: 12px; grid-auto-rows: max-content; }
@@ -1161,6 +1173,8 @@
             <div class="ear-bar"><i id="sight-bar-fill"></i></div>
             <div class="sight-stage">
               <div class="sight-staff" id="sight-staff"></div>
+              <div class="sight-arrow up" id="sight-arrow-up"><span class="ic" data-ic="caret-down"></span></div>
+              <div class="sight-arrow down" id="sight-arrow-down"><span class="ic" data-ic="caret-down"></span></div>
               <div class="sight-count" id="sight-count" hidden></div>
             </div>
             <div class="ear-prompt" id="sight-prompt"></div>
@@ -1397,7 +1411,7 @@
     void el.offsetWidth; // restart the flash
     el.classList.add("flash");
   }
-  ["kb-arrow-l", "kb-arrow-r"].forEach(id => $(id).addEventListener("animationend", () => $(id).classList.remove("flash")));
+  ["kb-arrow-l", "kb-arrow-r", "sight-arrow-up", "sight-arrow-down"].forEach(id => $(id).addEventListener("animationend", () => $(id).classList.remove("flash")));
 
   function flashKey(m) {
     keyEls[m].classList.add("pressed");
@@ -4203,12 +4217,12 @@ ${letter}${note(n)}${wrong ? note(wrong) : ""}
   }
 
   // Draws are queued: a redraw for a wrong key must not overlap the next question's draw.
-  // wrong: the wrongly played note, shown in red. cls: "miss" colours the question note red.
+  // wrong: the wrongly played note, shown in red.
   let sightOsmd = null, sightDrawing = Promise.resolve();
-  function sightDraw(n, wrong = null, cls = "") {
-    return sightDrawing = sightDrawing.catch(() => {}).then(() => sightRender(n, wrong, cls));
+  function sightDraw(n, wrong = null) {
+    return sightDrawing = sightDrawing.catch(() => {}).then(() => sightRender(n, wrong));
   }
-  async function sightRender(n, wrong, cls) {
+  async function sightRender(n, wrong) {
     if (!window.opensheetmusicdisplay) return;
     if (!sightOsmd) {
       sightOsmd = new opensheetmusicdisplay.OpenSheetMusicDisplay($("sight-staff"), {
@@ -4224,7 +4238,7 @@ ${letter}${note(n)}${wrong ? note(wrong) : ""}
     const staff = $("sight-staff");
     if (wrong) staff.querySelectorAll(".vf-stavenote")[1]?.classList.add("wrong");
     // Already answered while this was waiting to draw: keep the question note green
-    staff.className = "sight-staff" + (sight.solved === n ? " good" : cls ? " " + cls : "");
+    staff.className = "sight-staff" + (sight.solved === n ? " good" : "");
   }
 
   // ---- Reference: both clefs with the names of the notes on the lines, then in the spaces
@@ -4342,7 +4356,7 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
       keyEls[m]?.classList.add("bad");
       prompt.className = "ear-prompt bad";
       // Show the played note in red beside the question, spelled the same way (flat or sharp).
-      // Too far outside the clef to fit: the question note itself flashes red instead.
+      // Too far outside the clef to fit: a red arrow flashes at the staff's top or bottom edge instead.
       const target = sight.target, [lo, hi] = SIGHT_RANGES[target.clef].ledger;
       // Simple mode: the octave doesn't matter, so the played note is drawn in the octave nearest the question
       const shown = simple ? m + 12 * Math.round((target.midi - m) / 12) : m;
@@ -4350,8 +4364,11 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
       prompt.textContent = `Not ${sightSay(sightNoteName(played))}, try again`;
       if (shown >= lo && shown <= hi) sightDraw(target, played);
       else {
-        sightDraw(target, null, "miss");
-        sightLater(() => $("sight-staff").classList.remove("miss"), 400);
+        sightDraw(target); // a red note from an earlier wrong key makes way
+        const el = $(shown < lo ? "sight-arrow-down" : "sight-arrow-up");
+        el.classList.remove("flash");
+        void el.offsetWidth; // restart the flash
+        el.classList.add("flash");
       }
       return;
     }
