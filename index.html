@@ -14,6 +14,8 @@
     --border: #e0ded8;
     --accent: #2f6fde;
     --accent-soft: #dbe7fb;
+    --danger: #d64545;
+    --danger-soft: #f8dede;
     --hl: #9a55cf;
     --hl-soft: #ead9f7;
     --hl-strong: #7436a8;
@@ -22,6 +24,7 @@
     --black-key: #1f1f22;
     --key-on: #2f6fde;
     --play: #ee8a1f;
+    --play-lh: #1a9aa8;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
     --kb-h: 150px;
   }
@@ -35,6 +38,8 @@
       --border: #2e2e34;
       --accent: #6a9cff;
       --accent-soft: #24324d;
+      --danger: #ff7a7a;
+      --danger-soft: #4a2628;
       --hl: #b57be6;
       --hl-soft: #d6bdf0;
       --hl-strong: #9150cf;
@@ -149,6 +154,7 @@
   .mini-staff svg { display: block; }
   .mini-staff.on .vf-stavenote path, .mini-staff.mix .vf-notehead.sel path { fill: var(--key-on); stroke: var(--key-on); }
   .mini-staff.playing .vf-stavenote path, .mini-staff.mix .vf-notehead.play path { fill: var(--play); stroke: var(--play); }
+  .mini-staff.playing-lh .vf-stavenote path, .mini-staff.mix .vf-notehead.playl path { fill: var(--play-lh); stroke: var(--play-lh); }
   .mini-staff.mix .vf-notehead.good path { fill: #2e9e6a; stroke: #2e9e6a; }
   .mini-staff.mix .vf-notehead.bad path { fill: #d64545; stroke: #d64545; }
   .mini-staff .ottava { position: absolute; right: 7px; font: italic 600 0.68rem Georgia, serif; color: #555; }
@@ -173,6 +179,8 @@
   .key.white.target, .key.black.target { background: var(--play); border-color: var(--play); animation: pulse 0.8s ease-in-out infinite alternate; }
   @keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.3); } }
   .key.white.playing, .key.black.playing { background: var(--oc); border-color: var(--oc); }
+  /* Left-hand notes show in teal instead of orange, so the hands can be told apart */
+  .key.lh { --play: var(--play-lh); }
   /* A note still sounding after its start fades to pale orange: keep it down, don't strike it again */
   .key.white.held:not(.target) { --oc: color-mix(in srgb, var(--play) 40%, var(--white-key)); }
   .key.black.held:not(.target) { --oc: color-mix(in srgb, var(--play) 45%, var(--black-key)); }
@@ -198,7 +206,7 @@
   .key.hl .lbl { color: #2a1747; font-weight: 600; }
   .key.black.hl .lbl, .key.hl.tonic .lbl, .key.on .lbl, .key.playing .lbl, .key.target .lbl,
   .key.good .lbl, .key.bad .lbl { color: #fff; font-weight: 600; }
-  .key.white.held:not(.target, .good, .bad, .on) .lbl { color: #7a3f00; }
+  .key.white.held:not(.target, .good, .bad, .on) .lbl { color: color-mix(in srgb, var(--play) 55%, #000); }
 
   /* ---------- Views ---------- */
   .views-area { min-height: 0; }
@@ -463,7 +471,6 @@
   .measure { border: 1px solid var(--border); border-radius: 10px; padding: 5px 8px; cursor: pointer; background: var(--panel-2); }
   .measure .mnum { font-size: 0.72rem; color: var(--muted); }
   .measure .chips { gap: 4px; }
-  .measure.start { border-color: var(--accent); }
   .measure.now { background: var(--accent-soft); }
   .measure.inloop { background: rgba(238, 138, 31, 0.14); }
   .chip.now { background: var(--play); color: #fff; }
@@ -497,6 +504,10 @@
   .toggle input:checked ~ .bg { background: var(--accent-soft); }
   .toggle input:checked ~ .ic, .toggle input:checked ~ b { color: var(--accent); }
   .toggle input:focus-visible ~ .bg { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* Toggles that switch something off (ignore repeat signs): red when on, and the slash only shows then */
+  .toggle.red input:checked ~ .bg { background: var(--danger-soft); }
+  .toggle.red input:checked ~ .ic { color: var(--danger); }
+  .toggle input:not(:checked) ~ .ic .slash { display: none; }
   .hand b { font-size: 0.75rem; }
   .toggle.hand input:not(:checked) ~ b { text-decoration: line-through; }
   /* Armed while waiting for a click on the score */
@@ -550,10 +561,8 @@
   .chip-info .ic { width: 15px; height: 15px; }
   button.chip-info { border: 1px solid transparent; cursor: pointer; }
   @media (hover: hover) { button.chip-info:hover { border-color: var(--accent); color: var(--text); } }
-  /* The start point chip is blue like its line on the score; it rests while a loop is on */
-  .chip-info.reset-start { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-  @media (hover: hover) { button.chip-info.reset-start:hover { color: var(--accent); } }
-  .chip-info.reset-start:disabled { opacity: 0.4; cursor: default; border-color: transparent; }
+  /* The playhead chip is orange like the playhead on the score */
+  .chip-info.playhead { background: color-mix(in srgb, var(--play) 18%, transparent); color: var(--play); font-weight: 600; }
   .chip-info.stats { color: var(--text); font-weight: 600; }
   .chip-info.stats.empty { display: none; }
   /* The loop's range, orange like its box on the score */
@@ -621,7 +630,7 @@
   .loop-box.to { border-bottom-right-radius: 4px; }
   .loop-box.from::before { border-top-left-radius: 4px; }
   .loop-box.to::before { border-top-right-radius: 4px; }
-  .loop-box span, .start-mark span {
+  .loop-box span {
     position: absolute; bottom: 100%; font: 600 11px/16px system-ui, sans-serif; white-space: nowrap; color: #fff;
   }
   .loop-box span { left: 0; padding: 0 6px; display: flex; align-items: center; gap: 4px; }
@@ -634,8 +643,6 @@
   .miss-note i { position: absolute; background: #d64545; }
   .miss-note i.head { border-radius: 50%; transform: rotate(-20deg); }
   .miss-note b { position: absolute; color: #d64545; font: 400 1px/1 serif; transform: translate(-100%, -50%); }
-  .start-mark { position: absolute; width: 3px; border-radius: 0 0 2px 2px; background: var(--accent); pointer-events: none; }
-  .start-mark span { left: 50%; transform: translateX(-50%); background: var(--accent); padding: 0 6px; border-radius: 4px; }
   /* What to click next while picking a loop, floating over the score */
   .loop-pick {
     position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5;
@@ -846,11 +853,11 @@
     <section class="view view-sheet" id="view-sheet">
       <div class="sheet-main">
         <div class="sheet-toolbar">
-          <button id="open-file" class="icon-btn labelled" data-tip="My sheet music: open a saved sheet or add a new file"><span class="ic" data-ic="folder-open"></span>Open</button>
-          <input type="file" id="xml-file" accept=".musicxml,.xml" hidden>
           <span class="sheet-title" id="sheet-title"></span>
           <span class="sheet-key" id="sheet-key"></span>
           <span class="spacer"></span>
+          <button id="open-file" class="icon-btn labelled" data-tip="My sheet music: open a saved sheet or add a new file"><span class="ic" data-ic="folder-open"></span>Open</button>
+          <input type="file" id="xml-file" accept=".musicxml,.xml,.mxl" hidden>
           <label class="icon-btn toggle" data-tip="Show the song's key on the piano (purple)">
             <input type="checkbox" id="show-key"><span class="ic" data-ic="highlighter-circle"></span>
           </label>
@@ -885,10 +892,10 @@
           <div class="playbar-inner">
             <div class="group">
               <button id="xml-play" class="play-btn" data-tip="Play"><span class="ic" data-ic="play"></span></button>
-              <button id="xml-stop" class="icon-btn" data-tip="Reset: stop, go back to the start point (or the loop start) and clear the correct/wrong count"><span class="ic" data-ic="arrow-counter-clockwise"></span></button>
-              <button class="chip-info reset-start" id="reset-start" data-tip="Start point: the blue line on the score, where Play begins. Click a note to move it. Click here to send it back to the start of the song">
-                <span class="ic" data-ic="map-pin"></span><span id="play-from"></span>
-              </button>
+              <button id="xml-stop" class="icon-btn" data-tip="Reset: stop, go back to the start (or the loop start) and clear the correct/wrong count"><span class="ic" data-ic="arrow-counter-clockwise"></span></button>
+              <span class="chip-info playhead" data-tip="Playhead: the orange bar on the score, where Play continues from. Click a note on the score or a measure in the list to move it">
+                <span class="ic" data-ic="map-pin"></span><span id="playhead-pos"></span>
+              </span>
             </div>
 
             <div class="divider"></div>
@@ -963,11 +970,19 @@
 
             <div class="divider"></div>
 
+            <div class="group">
+              <label class="icon-btn toggle red" data-tip-title="Ignore repeat signs" data-tip="Play the score straight through as printed: repeat signs, first and second endings, D.S. and codas are skipped. Off: they are followed, so a repeated section is played again">
+                <input type="checkbox" id="ignore-repeats"><span class="ic" data-ic="repeat-sign"></span>
+              </label>
+            </div>
+
+            <div class="divider"></div>
+
             <div class="pop right click">
               <button class="icon-btn" data-tip="Advanced settings"><span class="ic" data-ic="gear-six"></span></button>
               <div class="popover">
                 <div class="pop-body settings">
-                  <label class="switch-row"><span>Keep wrong notes<small>Wait mode: red notes stay on the score like the green ones, until Reset. Off: they clear once you get the note right</small></span><input type="checkbox" id="keep-miss" class="switch" checked></label>
+                  <label class="switch-row"><span>Persist wrong notes<small>Wait mode: red notes stay on the score like the green ones, until Reset. Off: they clear once you get the note right</small></span><input type="checkbox" id="persist-miss" class="switch" checked></label>
                   <hr>
                   <label class="switch-row"><span>Forgiving note order<small>Wait mode: a note from the very next step, up to a beat away, also counts if you play it a little early (hands not quite together). Off: notes must come in the written order. Turn this on if correct playing registers as wrong notes at fast speeds</small></span><input type="checkbox" id="forgiving" class="switch"></label>
                 </div>
@@ -982,11 +997,11 @@
             <h2>My sheet music</h2>
             <button class="icon-btn small" id="lib-close" data-tip="Close (Esc)"><span class="ic" data-ic="x"></span></button>
           </div>
-          <button class="lib-add" id="lib-add" data-tip="Choose a MusicXML file (.musicxml / .xml) to save a copy here and open it">
+          <button class="lib-add" id="lib-add" data-tip="Choose a MusicXML file (.musicxml, .xml or .mxl) to save a copy here and open it">
             <span class="ic" data-ic="plus-circle"></span>Add new file
           </button>
           <p class="lib-note"><span class="ic" data-ic="info"></span><span>Adding a file saves a copy of the sheet music in this browser. It isn't linked to the original file, so if you edit it elsewhere (e.g. MuseScore), add it again. Clearing this browser's site data removes the saved copies.</span></p>
-          <p class="lib-note"><span class="ic" data-ic="info"></span><span>Uncompressed MusicXML only (.musicxml / .xml, not .mxl). In MuseScore: File, Export, MusicXML, uncompressed.</span></p>
+          <p class="lib-note"><span class="ic" data-ic="info"></span><span>MusicXML files: .musicxml, .xml, or compressed .mxl (MuseScore's default export and musescore.com downloads). A compressed file is unpacked as it is added.</span></p>
           <label class="lib-search"><span class="ic" data-ic="magnifying-glass"></span><input type="search" id="lib-search" placeholder="Search"></label>
           <div class="lib-msg" id="lib-msg"></div>
           <div class="lib-list" id="lib-list"></div>
@@ -1258,6 +1273,7 @@
   let playingMidis = new Set(); // keys sounding during sheet music playback
   let heldMidis = new Set();    // those past their start: still held, not struck again
   let targetMidis = new Set();  // keys to play next in Wait mode
+  let leftMidis = new Set();    // those lit by the left hand alone, shown teal (a key both hands play is orange)
   let overlay = null; // { label, pcs: Set<chroma> | null, midis: Set<midi> | null, tonic: chroma | null }
 
   const $ = id => document.getElementById(id);
@@ -1647,8 +1663,8 @@
   }
 
   // ---------- Mini staff ----------
-  // A small grand staff beside the piano showing what's sounding: playback (orange), else the
-  // selection (blue), else the key just pressed (black, for a moment). Middle C and up go on the
+  // A small grand staff beside the piano showing what's sounding: playback (orange, teal for the
+  // left hand), else the selection (blue), else the key just pressed (black, for a moment). Middle C and up go on the
   // treble staff, the rest on the bass staff. Drawn with the same engraver as the sheet music.
   const miniEl = $("mini-staff");
   const MINI_ZOOM = 0.75, MINI_TOP = 30; // px from the top of the box to the top staff line
@@ -1706,14 +1722,15 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     if (miniEl.hidden || !miniEl.offsetParent || !window.opensheetmusicdisplay || miniBusy) return;
     // Pressed keys are drawn with the selection, or in Wait mode with the notes playing. Each note
     // gets a tone: green / red for a Wait mode answer, black for any other press (also when it's
-    // part of the selection, so you can see it register), else orange (playing) or blue (selected)
+    // part of the selection, so you can see it register), else orange / teal (playing, right / left
+    // hand) or blue (selected)
     const sounding = playingMidis.size > 0, withPressed = !sounding || $("wait").checked;
     const set = new Set([...(sounding ? playingMidis : selected), ...(withPressed ? pressed : [])]);
     const midis = [...set].sort((a, b) => a - b);
-    const tone = m => withPressed && pressed.has(m) ? judged.get(m) || "" : sounding ? "play" : "sel";
+    const tone = m => withPressed && pressed.has(m) ? judged.get(m) || "" : sounding ? (leftMidis.has(m) ? "playl" : "play") : "sel";
     const tones = midis.map(tone);
     // One tone throughout colours the whole staff; otherwise each notehead is coloured ("mix")
-    const cls = tones.some(t => t !== tones[0]) || ["good", "bad"].includes(tones[0]) ? "mix" : { play: "playing", sel: "on" }[tones[0]] || "";
+    const cls = tones.some(t => t !== tones[0]) || ["good", "bad"].includes(tones[0]) ? "mix" : { play: "playing", playl: "playing-lh", sel: "on" }[tones[0]] || "";
     const treble = miniStaffPart(midis.filter(m => m >= 60), true), bass = miniStaffPart(midis.filter(m => m < 60), false);
     const xml = miniXml(treble.notes, bass.notes);
     const state = xml + cls + (cls === "mix" ? tones : "");
@@ -1780,6 +1797,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       el.classList.toggle("held", playing && heldMidis.has(m));
       const target = targetMidis.has(m);
       el.classList.toggle("target", target);
+      el.classList.toggle("lh", (playing || target) && leftMidis.has(m));
       let label = "";
       if (on || hl || playing || target) label = pc(m);
       else if (m % 12 === 0) label = "C" + octaveOf(m);
@@ -2076,7 +2094,50 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
 
   // ---------- Sheet music (MusicXML) ----------
   const STEP_SEMIS = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  // Measures in playing order: a printed measure inside a repeat appears once per pass.
+  // Each entry has src (its index in the printed score and in OSMD's MeasureList), pass (0 = first time
+  // through) and passes (how many times it's played). Positions (start) run through the playing order.
   let xmlMeasures = [];
+  let printedMeasures = []; // the measures as written, before repeats are unrolled
+
+  // "m5", or "m5 (2nd)" for a later pass through a repeat
+  const ordinal = n => n + (["th", "st", "nd", "rd"][n % 10 > 3 || Math.floor(n / 10) % 10 === 1 ? 0 : n % 10]);
+  const mLabel = m => `m${m.number}` + (m.pass ? ` (${ordinal(m.pass + 1)})` : "");
+
+  // Lay the printed measures out in playing order. order lists printed measure indices as they are played
+  // (from the score's cursor walk); null, or an order that doesn't cover the score, means straight through.
+  function unrollRepeats(order) {
+    const n = printedMeasures.length;
+    if (order) {
+      // The cursor only stops where there are notes or rests, so a bar with nothing in it is never visited: put it
+      // back where it belongs. A bar skipped on one pass but played on another (a 1st ending) is left alone.
+      const visited = new Set(order);
+      const missing = (from, to) => Array.from({ length: Math.max(0, to - from) }, (_, j) => from + j).filter(i => !visited.has(i));
+      order = order.flatMap((i, k) => [...missing(k ? order[k - 1] + 1 : 0, i), i]);
+      order.push(...missing(order[order.length - 1] + 1, n));
+    }
+    const ok = order && order.every(i => i >= 0 && i < n) && new Set(order).size === n;
+    if (!ok) order = printedMeasures.map((_, i) => i);
+    const passes = {}, seen = {};
+    order.forEach(i => { passes[i] = (passes[i] || 0) + 1; });
+    let start = 0;
+    xmlMeasures = order.map(i => {
+      const pass = seen[i] = (seen[i] ?? -1) + 1;
+      const m = { ...printedMeasures[i], src: i, pass, passes: passes[i], start };
+      start += m.length;
+      return m;
+    });
+  }
+
+  // A printed measure inside a repeat is played more than once: the pass nearest the playhead
+  function passAt(src) {
+    const ref = playhead();
+    let best = -1;
+    xmlMeasures.forEach((m, i) => {
+      if (m.src === src && (best === -1 || Math.abs(m.start - ref) < Math.abs(xmlMeasures[best].start - ref))) best = i;
+    });
+    return best;
+  }
 
   function parseMusicXML(text) {
     const doc = new DOMParser().parseFromString(text, "application/xml");
@@ -2215,7 +2276,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
         if (prev && sym && prev.sym === sym) { prev.notes = prev.notes.concat(notes); prev.end = (s + 1) * segLen; continue; }
         segs.push({ sym, fit, notes, start: s * segLen, end: (s + 1) * segLen });
       }
-      html += `<div class="measure${idx === playFrom ? " start" : ""}" data-measure="${idx}"><div class="mnum">m${esc(m.number)}</div><div class="chips">` +
+      html += `<div class="measure" data-measure="${idx}"><div class="mnum">${esc(mLabel(m))}</div><div class="chips">` +
         segs.map((s, k) => s.sym
           ? chip(s.sym, `data-seg="${idx}|${k}"`)
           : `<span class="chip" data-segi="${idx}|${k}">${s.notes.length ? [...new Set(s.notes.map(n => pc(n.midi)))].join(" ") : "rest"}</span>`).join("") +
@@ -2235,11 +2296,10 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       const parsed = parseMusicXML(text);
       if (!parsed.measures.length) throw new Error("no measures found");
       xmlTitle = parsed.title;
-      xmlMeasures = parsed.measures;
+      printedMeasures = parsed.measures;
+      unrollRepeats(null); // printed order until the score is engraved
       stopPlayback();
       clearTrail();
-      playFrom = 0;
-      playFromPos = 0;
       loopFrom = loopTo = loopFirst = null;
       loopPick = null;
       $("loop").checked = false;
@@ -2248,13 +2308,14 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       $("tempo-reset").dataset.tip = fileTempo
         ? `Reset to ${Math.round(fileTempo)} BPM (the tempo in this file)`
         : "Reset to 100 BPM (this file has no tempo, so 100 is the default)";
-      buildTimeline();
-      if (songRange) fitPiano(...songRange);
       $("sheet-title").textContent = parsed.title;
       $("player").hidden = false;
-      renderSheet();
-      updatePlayFrom();
+      // Engrave first: the score's cursor walk gives the playing order (repeats unrolled) everything else builds on
       await renderScore(text);
+      buildTimeline();
+      if (songRange) fitPiano(...songRange);
+      renderSheet();
+      updatePlayhead();
       applySongKey();
     }
   }
@@ -2381,11 +2442,11 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // Add a file: check it reads as MusicXML, save a copy (never replacing), then open it
   async function addFile(file) {
     try {
-      const text = await file.text();
+      const text = await readSheetFile(file);
       parseMusicXML(text);
       await refreshLibrary();
       const now = new Date().toISOString();
-      const rec = { name: uniqueName(file.name.replace(/\.(musicxml|xml)$/i, "") || "Untitled"), added: now, opened: now, text };
+      const rec = { name: uniqueName(file.name.replace(/\.(musicxml|xml|mxl)$/i, "") || "Untitled"), added: now, opened: now, text };
       rec.id = await putSheet(rec);
       navigator.storage?.persist?.().catch(() => {});
       sheets.push(rec);
@@ -2456,6 +2517,54 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     renderLibrary();
   }
 
+  // The text of a MusicXML file, unpacking a compressed .mxl (a zip, "PK" at the start, whatever the extension)
+  async function readSheetFile(file) {
+    const buf = await file.arrayBuffer();
+    const head = new Uint8Array(buf, 0, Math.min(2, buf.byteLength));
+    return head[0] === 0x50 && head[1] === 0x4b ? readMxl(buf) : new TextDecoder().decode(buf);
+  }
+
+  // .mxl: META-INF/container.xml names the score file inside the zip. The central directory is read by hand and
+  // entries inflated with the browser's own DecompressionStream, so no zip library is needed.
+  async function readMxl(buf) {
+    const dv = new DataView(buf), bytes = new Uint8Array(buf), utf8 = new TextDecoder();
+    // The end-of-central-directory record sits at the very end, before a comment of variable length
+    let eocd = -1;
+    for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65557); i--) {
+      if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    }
+    if (eocd === -1) throw new Error("not a valid .mxl (zip) file");
+    const count = dv.getUint16(eocd + 10, true);
+    const entries = new Map();
+    for (let i = 0, p = dv.getUint32(eocd + 16, true); i < count; i++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) throw new Error("damaged .mxl file");
+      const nameLen = dv.getUint16(p + 28, true), extraLen = dv.getUint16(p + 30, true), commentLen = dv.getUint16(p + 32, true);
+      entries.set(utf8.decode(bytes.subarray(p + 46, p + 46 + nameLen)), {
+        method: dv.getUint16(p + 10, true), size: dv.getUint32(p + 20, true), offset: dv.getUint32(p + 42, true),
+      });
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    const read = async name => {
+      const e = entries.get(name);
+      if (!e) throw new Error(`${name} is missing from the .mxl`);
+      const start = e.offset + 30 + dv.getUint16(e.offset + 26, true) + dv.getUint16(e.offset + 28, true);
+      const data = bytes.subarray(start, start + e.size);
+      if (e.method === 0) return utf8.decode(data);
+      if (e.method !== 8) throw new Error("the .mxl uses a compression this app can't read");
+      if (!window.DecompressionStream) throw new Error("this browser can't unpack .mxl files; export uncompressed MusicXML instead");
+      return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+    };
+    let path = null;
+    if (entries.has("META-INF/container.xml")) {
+      const doc = new DOMParser().parseFromString(await read("META-INF/container.xml"), "application/xml");
+      path = doc.querySelector("rootfile")?.getAttribute("full-path");
+    }
+    // No container: take the first score-looking file outside META-INF
+    path ||= [...entries.keys()].find(n => /\.(musicxml|xml)$/i.test(n) && !n.startsWith("META-INF/"));
+    if (!path) throw new Error("no score found inside the .mxl");
+    return read(path);
+  }
+
   $("xml-file").addEventListener("change", e => {
     if (e.target.files[0]) addFile(e.target.files[0]);
     e.target.value = ""; // allow adding the same file again
@@ -2517,7 +2626,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     const [mi, si] = b.dataset.seg.split("|").map(Number);
     const m = xmlMeasures[mi], seg = m.segs[si];
     document.querySelectorAll("[data-seg]").forEach(x => x.classList.toggle("active", x === b));
-    overlay = { label: `m${m.number} notes (${b.textContent})`, midis: new Set(seg.notes.map(n => n.midi)) };
+    overlay = { label: `${mLabel(m)} notes (${b.textContent})`, midis: new Set(seg.notes.map(n => n.midi)) };
     $("show-key").checked = false;
     // Voice slash chords as the matching inversion so the bass note is lowest
     const { rootC, type, bassC } = seg.fit;
@@ -2529,7 +2638,6 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // ---------- Sheet music playback ----------
   let timeline = [];       // notes with absolute onset/dur in quarter notes, ties merged
   let totalLen = 0;
-  let playFrom = 0;        // measure index playback starts from
   let tempo = 100;
   let playing = false;
   let anchorPos = 0, anchorTime = 0; // playhead position (quarters) at audio time anchorTime
@@ -2658,6 +2766,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     cancelAnimationFrame(rafId);
     haltAudio();
     setPlayState("resume");
+    updatePlayhead();
   }
   let pausedAt = null;
 
@@ -2671,32 +2780,37 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     setPlayState("play");
     holdAt = null;
     targetMidis = new Set();
-    if (was) { playingMidis = new Set(); heldMidis = new Set(); renderKeys(); markNow(null); }
+    if (was) { playingMidis = new Set(); heldMidis = new Set(); leftMidis = new Set(); renderKeys(); markNow(null); }
   }
 
   // Visual update each frame: light up sounding keys and the current measure/chord
   function tick() {
     if (!playing) return;
     const pos = position();
-    const now = new Set(), held = new Set();
+    const now = new Set(), held = new Set(), left = new Set(), right = new Set();
     const struck = 0.2 / secPerQ(); // a note shows as struck for its first 200 ms, then as held
     for (const n of timeline) {
       if (n.onset > pos) break;
       if (pos >= n.onset + n.dur) continue;
       now.add(n.midi);
+      (n.hand === "L" ? left : right).add(n.midi);
       // The latest note on a key decides, so a repeat shows as a new strike
       if (pos - n.onset > struck) held.add(n.midi); else held.delete(n.midi);
     }
     const targets = currentTargets();
-    const key = [...now].join(",") + "|" + [...held].join(",") + "|" + [...targets].join(",");
-    if (key !== [...playingMidis].join(",") + "|" + [...heldMidis].join(",") + "|" + [...targetMidis].join(",")) {
+    if (targets.size) for (const m of targets) (steps[stepIdx].right.has(m) ? right : left).add(m);
+    for (const m of right) left.delete(m);
+    const key = [...now].join(",") + "|" + [...held].join(",") + "|" + [...targets].join(",") + "|" + [...left].join(",");
+    if (key !== [...playingMidis].join(",") + "|" + [...heldMidis].join(",") + "|" + [...targetMidis].join(",") + "|" + [...leftMidis].join(",")) {
       playingMidis = now;
       heldMidis = held;
       targetMidis = targets;
+      leftMidis = left;
       renderKeys();
     }
     markNow(pos);
     moveCursor(pos);
+    updatePlayhead();
     rafId = requestAnimationFrame(tick);
   }
 
@@ -2711,20 +2825,44 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     }
     const id = mi + "|" + si;
     if (id === lastNow) return;
+    const lastMi = lastNow === null ? -1 : +lastNow.split("|")[0];
     lastNow = id;
     document.querySelectorAll(".measure.now, .chip.now").forEach(x => x.classList.remove("now"));
     if (mi === -1) return;
+    // Entering a measure that is played more than once: its trail from the earlier pass makes way
+    if (mi !== lastMi && xmlMeasures[mi].passes > 1 && (hitNotes.length || missNotes.length)) { paintHits(); drawMisses(); }
     document.querySelector(`[data-measure="${mi}"]`)?.classList.add("now");
     document.querySelector(`[data-seg="${mi}|${si}"], [data-segi="${mi}|${si}"]`)?.classList.add("now");
   }
 
-  function updatePlayFrom() {
-    const m = xmlMeasures[playFrom];
-    const beat = m ? beatOf(m, playFromPos) : 1;
-    $("play-from").textContent = m ? `m${m.number}/b${+beat.toFixed(2)}` : "";
-    document.querySelectorAll(".measure").forEach(x => x.classList.toggle("start", +x.dataset.measure === playFrom));
-    if (!playing && m) moveCursor(playFromPos);
-    drawScoreMarks();
+  // The playhead chip: whole beats while playing, the exact note position when stopped on one
+  function updatePlayhead() {
+    const pos = playhead(), m = xmlMeasures[measureAt(pos)];
+    if (m) {
+      const beat = beatOf(m, pos);
+      $("playhead-pos").textContent = `${mLabel(m)}/b${playing ? Math.floor(beat + 1e-6) : +beat.toFixed(2)}`;
+    }
+    if (!playing) { moveCursor(pos); drawScoreMarks(); lightPlayhead(pos); }
+  }
+
+  // Stopped or paused: light the notes at the playhead (the first at or after it) so the keyboard shows where
+  // you are. In Wait mode they pulse like targets and only the practised hand counts, which is just what Play
+  // would wait for; otherwise every note there shows in the playing colour. Only in the sheet view: the other
+  // views use the piano for their own things.
+  function lightPlayhead(pos) {
+    if (playing) { renderKeys(); return; } // the clock lights the keys itself
+    const sheet = document.querySelector(".app").classList.contains("sheet-view");
+    const hands = $("wait").checked ? practiceHands() : ["L", "R"];
+    const next = sheet ? timeline.find(n => n.onset >= pos - 1e-6 && hands.includes(n.hand)) : null;
+    const notes = next ? timeline.filter(n => Math.abs(n.onset - next.onset) < 1e-6 && hands.includes(n.hand)) : [];
+    const midis = new Set(notes.map(n => n.midi));
+    const wait = $("wait").checked;
+    playingMidis = wait ? new Set() : midis;
+    heldMidis = new Set();
+    targetMidis = wait ? midis : new Set();
+    leftMidis = new Set(notes.filter(n => n.hand === "L").map(n => n.midi));
+    notes.forEach(n => { if (n.hand === "R") leftMidis.delete(n.midi); });
+    renderKeys();
   }
 
   $("xml-play").addEventListener("click", () => {
@@ -2743,7 +2881,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   function resetPlayback() {
     stopPlayback();
     resetStats();
-    moveCursor(startPos());
+    updatePlayhead();
   }
   $("xml-stop").addEventListener("click", resetPlayback);
   // Reset, then in Wait mode start again straight away (it stops at the first note anyway)
@@ -2751,37 +2889,19 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     resetPlayback();
     if ($("wait").checked) $("xml-play").click();
   }
-  $("reset-start").addEventListener("click", () => {
-    if (!xmlMeasures.length) return;
-    playFrom = 0;
-    playFromPos = 0;
-    updatePlayFrom();
-    if (playing) { haltAudio(); startAt(0); }
-    else if (pausedAt !== null) pausedAt = 0;
-  });
   $("tempo").addEventListener("input", e => setTempo(+e.target.value));
 
-  // Clicking a measure (chip grid or score) sets the start point and jumps there if playing.
-  // In "Set loop" mode the first click picks the loop start and the second its end.
-  // pos (quarter notes) is an exact note position from a score click; chips use the measure start
+  // Clicking a measure (chip grid or score) moves the playhead there: playback jumps, or Play will continue from it.
+  // With a loop on, clicks outside the loop do nothing. In "Set loop" mode the first click picks the loop start
+  // and the second its end. pos (quarter notes) is an exact note position from a score click; chips use the measure start
   function handleMeasureClick(idx, pos = null) {
     if (loopPick) { pickLoop(idx, pos); return; }
-    // With a loop on, the start point rests: a click inside the loop just jumps the playhead there
-    const range = loopRange();
-    if (range) {
-      const at = pos ?? xmlMeasures[idx].start;
-      if (at < range.from - 1e-6 || at >= range.to - 1e-6) return;
-      if (playing) { haltAudio(); startAt(at); }
-      else { pausedAt = at; moveCursor(at); setPlayState("resume"); }
-      return;
-    }
-    playFrom = idx;
-    playFromPos = pos ?? xmlMeasures[idx].start;
-    updatePlayFrom();
-    if (playing) { haltAudio(); startAt(playFromPos); }
-    else if (pausedAt !== null) pausedAt = playFromPos;
+    const range = loopRange(), at = pos ?? xmlMeasures[idx].start;
+    if (range && (at < range.from - 1e-6 || at >= range.to - 1e-6)) return;
+    if (playing) { haltAudio(); startAt(at); }
+    else { pausedAt = at; setPlayState("resume"); }
+    updatePlayhead();
   }
-  let playFromPos = 0;
   document.addEventListener("click", e => {
     const meas = e.target.closest("[data-measure]");
     if (meas) handleMeasureClick(+meas.dataset.measure);
@@ -2800,15 +2920,17 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     if (!$("loop").checked || loopFrom === null || loopTo === null || !xmlMeasures.length) return null;
     return { from: loopFrom, to: loopTo };
   }
-  // Where Play and Reset start from: the loop start, else the start point (blue line)
-  const startPos = () => loopRange()?.from ?? playFromPos;
+  // Where Play and Reset start from: the loop start, else the beginning
+  const startPos = () => loopRange()?.from ?? 0;
+  // Where the playhead is: the music playing, else where it was paused or clicked, else the start
+  const playhead = () => playing ? position() : (pausedAt ?? startPos());
 
   // A clicked point covers one note (score) or a whole measure (chip)
   function pickPoint(idx, pos) {
     const m = xmlMeasures[idx];
     if (pos === null) return { idx, start: m.start, end: m.start + m.length, whole: true };
     const rel = pos - m.start;
-    const next = noteColumns(idx).find(c => c.rel > rel + 1e-4);
+    const next = noteColumns(m.src).find(c => c.rel > rel + 1e-4);
     return { idx, start: pos, end: m.start + (next ? next.rel : m.length) };
   }
 
@@ -2823,9 +2945,9 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   function fmtPos(pos, isEnd = false) {
     const m = xmlMeasures[measureAt(pos, isEnd)];
     if (!m) return "?";
-    if (isEnd && Math.abs(pos - m.start - m.length) < 1e-6) return `end of m${m.number}`;
+    if (isEnd && Math.abs(pos - m.start - m.length) < 1e-6) return `end of ${mLabel(m)}`;
     const beat = beatOf(m, pos);
-    return `m${m.number}/b${+beat.toFixed(2)}`;
+    return `${mLabel(m)}/b${+beat.toFixed(2)}`;
   }
 
   function setPickMode(mode) {
@@ -2846,7 +2968,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     const [a, b] = p.start < loopFirst.start ? [p, loopFirst] : [loopFirst, p];
     loopFrom = a.start;
     loopTo = b.end;
-    loopEndLabel = b.whole ? `end of m${xmlMeasures[b.idx].number}` : fmtPos(b.start);
+    loopEndLabel = b.whole ? `end of ${mLabel(xmlMeasures[b.idx])}` : fmtPos(b.start);
     loopFirst = null;
     setPickMode(null);
     resetAndGo(); // a new section is a new exercise: back to its start, count and trail cleared
@@ -2861,7 +2983,6 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     $("loop-pick").hidden = !loopPick;
     $("loop-pick-text").textContent = loopPick === "start" ? "Loop: click the first note" : "Loop: click the last note";
     $("loop-info").textContent = loopRange() ? `${fmtPos(loopFrom)} to ${loopEndLabel}` : "";
-    $("reset-start").disabled = $("loop").checked;
     document.querySelectorAll(".measure").forEach(x => {
       const m = xmlMeasures[+x.dataset.measure];
       x.classList.toggle("inloop", loopFrom !== null && m.start < loopTo - 1e-6 && m.start + m.length > loopFrom + 1e-6);
@@ -2872,10 +2993,17 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // Loop on: pick its two ends. Loop off (or Cancel / Esc while picking): the section is cleared.
   $("loop").addEventListener("change", () => {
     if ($("loop").checked && !xmlMeasures.length) $("loop").checked = false;
-    const had = loopFrom !== null && loopTo !== null;
+    // The box is already unchecked here, so loopRange() is gone: a playhead resting at the loop start is at loopFrom
+    const had = loopFrom !== null && loopTo !== null, at = playing ? position() : (pausedAt ?? loopFrom ?? 0);
     clearLoop();
     if ($("loop").checked) setPickMode("start");
-    else if (had) resetAndGo(); // the section is gone: back to the start point, count and trail cleared
+    // The section is gone: the trail and count clear like on Reset, but the playhead stays where it was, playing on
+    // past the old end or resting at the same spot (now a paused position, since the start is no longer the loop start)
+    else if (had) {
+      resetStats();
+      if (!playing) { pausedAt = at; setPlayState("resume"); }
+      updatePlayhead();
+    }
   });
   function cancelLoopPick() {
     $("loop").checked = false;
@@ -2891,6 +3019,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   let osmd = null;
   let cursorTimes = []; // quarter-note position of each cursor step
   let cursorIdx = -1;
+  let cursorRuns = [];  // the cursor's walk through the score (see walkCursor)
 
   async function renderScore(text) {
     const el = $("score");
@@ -2908,22 +3037,69 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     await osmd.load(text);
     osmd.render();
     scoreWidth = el.clientWidth;
-    indexCursor();
-    moveCursor(playFromPos);
+    // The cursor's walk is the playing order: OSMD follows repeat signs, voltas, D.S. and codas
+    cursorRuns = walkCursor();
+    unrollRepeats(playingOrder());
+    indexCursor(cursorRuns);
+    moveCursor(playhead());
     setPickMode(loopPick);
   }
 
-  // Walk the cursor once through the piece to record when each step happens
-  function indexCursor() {
-    const c = osmd.cursor;
+  // Printed measure indices in the order they are played, or null for straight through
+  const playingOrder = () => $("ignore-repeats").checked ? null : cursorRuns.map(r => r.src);
+
+  // "Ignore repeat signs": lay the piece out again and start over, the way a freshly opened file does
+  $("ignore-repeats").checked = !!ui.ignoreRepeats;
+  $("ignore-repeats").addEventListener("change", () => {
+    ui.ignoreRepeats = $("ignore-repeats").checked;
+    saveUi();
+    if (!osmd || !printedMeasures.length) return;
+    stopPlayback();
+    clearTrail();
+    $("loop").checked = false;
+    clearLoop();
+    unrollRepeats(playingOrder());
+    indexCursor(cursorRuns);
+    buildTimeline();
+    renderSheet();
+    updatePlayhead();
+    moveCursor(0);
+  });
+
+  // One pass of the cursor through the piece, grouped by the measure it is in:
+  // [{ src: printed measure index, times: [quarters into that measure, one per cursor step] }].
+  // A measure played again after a repeat sign is a new run.
+  function walkCursor() {
+    const c = osmd.cursor, measures = osmd.Sheet.SourceMeasures;
     c.show();
     c.reset();
-    cursorTimes = [];
+    const runs = [];
+    let lastT = -1;
     while (!c.Iterator.EndReached) {
-      cursorTimes.push(c.Iterator.currentTimeStamp.RealValue * 4);
+      const src = c.Iterator.CurrentMeasureIndex, t = c.Iterator.currentTimeStamp.RealValue;
+      const last = runs[runs.length - 1];
+      if (!last || last.src !== src || t <= lastT) runs.push({ src, times: [] });
+      runs[runs.length - 1].times.push((t - measures[src].AbsoluteTimestamp.RealValue) * 4);
+      lastT = t;
       c.next();
     }
     c.reset();
+    return runs;
+  }
+
+  // Record the playing position of each cursor step, so moveCursor can find the step for a position
+  function indexCursor(runs = walkCursor()) {
+    // The runs follow the playing order, minus any empty bars the cursor skipped. With repeat signs ignored
+    // the cursor still walks them, so a later pass maps onto the first one: moveCursor scans the steps in order,
+    // and the repeated steps all sit at or before any later position, so it skips straight over them
+    let k = -1;
+    cursorTimes = runs.flatMap(r => {
+      k++;
+      while (k < xmlMeasures.length && xmlMeasures[k].src !== r.src) k++;
+      const m = xmlMeasures[k] || xmlMeasures.find(x => x.src === r.src);
+      return r.times.map(t => (m ? m.start : 0) + t);
+    });
+    osmd.cursor.reset();
     cursorIdx = 0;
   }
 
@@ -2963,7 +3139,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       if (!scoreWidth) return;
       osmd.render();
       indexCursor();
-      moveCursor(playing ? position() : playFromPos);
+      moveCursor(playhead());
       drawScoreMarks();
     }, 150);
   }
@@ -2978,10 +3154,10 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     return { ox: sr.left - br.left + box.scrollLeft, oy: sr.top - br.top + box.scrollTop, u: 10 * osmd.zoom };
   }
 
-  // Note columns of a measure across all staves: [{ x (px), rel (quarters from measure start) }]
-  function noteColumns(idx) {
+  // Note columns of a printed measure across all staves: [{ x (px), rel (quarters from measure start) }]
+  function noteColumns(src) {
     const o = scoreOrigin();
-    const staves = o && osmd.GraphicSheet.MeasureList[idx];
+    const staves = o && osmd.GraphicSheet.MeasureList[src];
     if (!staves) return [];
     const cols = new Map();
     for (const gm of staves) {
@@ -2995,6 +3171,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     return [...cols.values()].sort((a, b) => a.rel - b.rel);
   }
 
+  // Boxes of the printed measures, indexed like OSMD's MeasureList (xmlMeasures[i].src)
   function measureBoxes() {
     const o = scoreOrigin();
     if (!o) return [];
@@ -3014,7 +3191,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
 
   function drawScoreMarks() {
     const box = $("score");
-    box.querySelectorAll(".loop-box, .start-mark").forEach(x => x.remove());
+    box.querySelectorAll(".loop-box").forEach(x => x.remove());
     paintHits();
     drawMisses();
     const boxes = measureBoxes();
@@ -3028,19 +3205,24 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     };
     // Shade [from, to) measure by measure, cutting at note columns inside a measure
     const xAt = (i, pos) => {
-      const m = xmlMeasures[i], b = boxes[i];
+      const m = xmlMeasures[i], b = boxes[m.src];
       if (pos <= m.start + 1e-6) return b.x;
       if (pos >= m.start + m.length - 1e-6) return b.x + b.w;
       // Cut halfway between this note and the one before, so wide lyrics on either side stay clear
-      const cols = noteColumns(i);
+      const cols = noteColumns(m.src);
       const k = cols.findIndex(c => Math.abs(c.rel - (pos - m.start)) < 1e-4);
       if (k === -1) return b.x;
       return k > 0 ? (cols[k - 1].x + cols[k].x) / 2 : cols[k].x - 6;
     };
+    // Both passes of a repeated measure land on the same printed one: draw it once
+    const drawn = new Set();
     const shade = (from, to, cls) => xmlMeasures.forEach((m, i) => {
-      if (!boxes[i] || m.start >= to - 1e-6 || m.start + m.length <= from + 1e-6) return;
+      if (!boxes[m.src] || m.start >= to - 1e-6 || m.start + m.length <= from + 1e-6) return;
       const l = xAt(i, Math.max(from, m.start)), r = xAt(i, Math.min(to, m.start + m.length));
-      add(cls, { ...boxes[i], x: l, w: Math.max(4, r - l) });
+      const key = `${m.src}|${l.toFixed(1)}|${r.toFixed(1)}`;
+      if (drawn.has(key)) return;
+      drawn.add(key);
+      add(cls, { ...boxes[m.src], x: l, w: Math.max(4, r - l) });
     });
     // The loop, or just its first note while the last one is still to be picked
     if (loopFrom !== null) shade(loopFrom, loopTo, "loop-box");
@@ -3053,14 +3235,6 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       d.classList.toggle("from", !joined(loopBoxes[i - 1], d));
       d.classList.toggle("to", !joined(d, loopBoxes[i + 1]));
     });
-    // The start point rests while a loop is on
-    const sb = !$("loop").checked && boxes[playFrom];
-    if (sb) {
-      // Put the start line at the exact note when the start isn't the measure's first beat
-      const rel = playFromPos - xmlMeasures[playFrom].start;
-      const col = noteColumns(playFrom).find(c => Math.abs(c.rel - rel) < 1e-4);
-      add("start-mark", { ...sb, x: col && rel > 1e-4 ? col.x - 6 : sb.x }, { width: "3px" }).innerHTML = "<span>Start</span>";
-    }
   }
 
   // Which measure and nearest note column a mouse event is over
@@ -3068,11 +3242,12 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     const boxes = measureBoxes();
     const br = $("score").getBoundingClientRect();
     const x = e.clientX - br.left + $("score").scrollLeft, y = e.clientY - br.top + $("score").scrollTop;
-    const idx = boxes.findIndex(b => b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    const src = boxes.findIndex(b => b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    const idx = src === -1 ? -1 : passAt(src);
     if (idx === -1) return null;
-    const cols = noteColumns(idx);
+    const cols = noteColumns(src);
     const near = cols.reduce((a, c) => (!a || Math.abs(c.x - x) < Math.abs(a.x - x) ? c : a), null);
-    return { idx, box: boxes[idx], col: near, pos: near ? xmlMeasures[idx].start + near.rel : null };
+    return { idx, box: boxes[src], col: near, pos: near ? xmlMeasures[idx].start + near.rel : null };
   }
 
   $("score").addEventListener("click", e => {
@@ -3107,7 +3282,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // ---------- Wait mode (practice) ----------
   // The playhead stops at each note of the practice hand(s) until you play it,
   // on the on-screen piano or a MIDI keyboard.
-  let steps = [];      // [{ onset, midis: [...] }] notes you have to play, grouped by onset
+  let steps = [];      // [{ onset, midis: [...], right: Set }] notes you have to play, grouped by onset (right: those the right hand plays)
   let stepIdx = 0;
   let hits = new Set(); // notes of the current step already played
   let early = new Set(); // notes of the next step played ahead of time (Forgiving note order)
@@ -3122,9 +3297,10 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     const hands = practiceHands();
     for (const n of timeline) {
       if (!hands.includes(n.hand)) continue;
-      const last = steps[steps.length - 1];
+      let last = steps[steps.length - 1];
       if (last && Math.abs(last.onset - n.onset) < 1e-6) { if (!last.midis.includes(n.midi)) last.midis.push(n.midi); }
-      else steps.push({ onset: n.onset, midis: [n.midi] });
+      else steps.push(last = { onset: n.onset, midis: [n.midi], right: new Set() });
+      if (n.hand === "R") last.right.add(n.midi);
     }
   }
 
@@ -3179,7 +3355,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     early = new Set();
     // The next step was played early in full: it's done too
     if (hits.size && steps[stepIdx]?.midis.every(n => hits.has(n))) { stepIdx++; hits = new Set(); }
-    if (!$("keep-miss").checked) { missNotes = []; drawMisses(); }
+    if (!$("persist-miss").checked) { missNotes = []; drawMisses(); }
     if (holdAt !== null) {
       // Restart the clock from where it was waiting
       anchorPos = holdAt;
@@ -3204,25 +3380,26 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // Right notes turn green where they're printed (tied notes included) and stay until Reset, the next Play
   // or the loop coming round.
   // Wrong keys are drawn over the score as red notes beside their column: for as long as the green ones
-  // with "Keep wrong notes" on, else until that step is done.
+  // with "Persist wrong notes" on, else until that step is done.
   // Nothing is re-engraved, so the music never moves.
   let hitNotes = [];  // [{ pos, midi }] notes played right
-  let missNotes = []; // [{ pos, midi }] wrong keys: the whole trail with "Keep wrong notes" on, else the current step's
+  let missNotes = []; // [{ pos, midi }] wrong keys: the whole trail with "Persist wrong notes" on, else the current step's
   $("forgiving").checked = !!ui.forgiving;
   $("forgiving").addEventListener("change", () => { ui.forgiving = $("forgiving").checked; saveUi(); });
-  $("keep-miss").checked = ui.keepMiss !== false;
-  $("keep-miss").addEventListener("change", () => {
-    ui.keepMiss = $("keep-miss").checked;
+  if (ui.persistMiss === undefined && ui.keepMiss !== undefined) { ui.persistMiss = ui.keepMiss; delete ui.keepMiss; saveUi(); } // setting renamed
+  $("persist-miss").checked = ui.persistMiss !== false;
+  $("persist-miss").addEventListener("change", () => {
+    ui.persistMiss = $("persist-miss").checked;
     saveUi();
     // Turned off: only the step being waited on keeps its red notes
-    if (!ui.keepMiss) { missNotes = missNotes.filter(x => x.pos === steps[stepIdx]?.onset); drawMisses(); }
+    if (!ui.persistMiss) { missNotes = missNotes.filter(x => x.pos === steps[stepIdx]?.onset); drawMisses(); }
   });
 
   // The printed noteheads for a note at a position
   function scoreHeads(pos, midi) {
-    const idx = measureAt(pos), staves = osmd?.GraphicSheet?.MeasureList[idx];
+    const m = xmlMeasures[measureAt(pos)], staves = m && osmd?.GraphicSheet?.MeasureList[m.src];
     if (!staves) return [];
-    const rel = pos - xmlMeasures[idx].start, out = [];
+    const rel = pos - m.start, out = [];
     for (const gm of staves) for (const se of gm?.staffEntries || []) {
       if (Math.abs(se.relInMeasureTimestamp.RealValue * 4 - rel) > 1e-4) continue;
       for (const gve of se.graphicalVoiceEntries || []) {
@@ -3261,7 +3438,17 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   }
   function paintHits() {
     $("score").querySelectorAll(".vf-notehead.hit, .vf-stavenote.hit").forEach(h => h.classList.remove("hit"));
-    hitNotes.forEach(n => paintHit(n.pos, n.midi));
+    hitNotes.filter(n => trailShown(n.pos)).forEach(n => paintHit(n.pos, n.midi));
+  }
+
+  // The trail is drawn on the printed measures, so inside a repeat only one pass can show at a time:
+  // the latest one the playhead has reached. Coming round again, each measure's old trail clears as you get to it.
+  function trailShown(pos) {
+    const m = xmlMeasures[measureAt(pos)];
+    if (!m || m.passes < 2) return true;
+    const now = playhead();
+    const same = xmlMeasures.filter(x => x.src === m.src);
+    return (same.filter(x => x.start <= now + 1e-6).pop() || same[0]) === m;
   }
 
   // How a wrong key is written in the piece's key signature: { step, octave, sign }.
@@ -3287,15 +3474,17 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     const o = scoreOrigin();
     if (!o) return;
     for (const { pos, midi } of missNotes) {
-      const idx = measureAt(pos), staves = (osmd.GraphicSheet.MeasureList[idx] || []).filter(Boolean);
-      const col = noteColumns(idx).find(c => Math.abs(c.rel - (pos - xmlMeasures[idx].start)) < 1e-4);
+      const m = xmlMeasures[measureAt(pos)];
+      if (!m || !trailShown(pos)) continue;
+      const staves = (osmd.GraphicSheet.MeasureList[m.src] || []).filter(Boolean);
+      const col = noteColumns(m.src).find(c => Math.abs(c.rel - (pos - m.start)) < 1e-4);
       if (!staves.length || !col) continue;
       // One hand practised: its staff. Both: treble from middle C up, bass below
       const hands = practiceHands();
       const upper = hands.length === 1 ? hands[0] === "R" : midi >= 60;
       const gm = upper ? staves[0] : staves[staves.length - 1];
       const top = STAFF_TOP[gm.InitiallyActiveClef?.ClefType] ?? STAFF_TOP[0];
-      const n = ghostNote(midi, xmlMeasures[idx].fifths || 0), d = n.octave * 7 + "CDEFGAB".indexOf(n.step), u = o.u;
+      const n = ghostNote(midi, m.fifths || 0), d = n.octave * 7 + "CDEFGAB".indexOf(n.step), u = o.u;
       const el = document.createElement("div");
       el.className = "miss-note";
       // Origin: the notehead's centre, just right of the printed column
@@ -3335,23 +3524,25 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // leaving it turns both back on
   $("wait").addEventListener("change", () => {
     $("lh").checked = $("rh").checked = !$("wait").checked;
-    // Wait mode only does anything while playing, so turning it on starts (or resumes) playback;
-    // turning it off is a full reset: stopped, back at the start, count and green/red notes cleared
+    // Wait mode only does anything while playing, so turning it on starts (or resumes) playback.
+    // Turning it off ends the exercise: count and green/red notes clear, but the playhead stays put,
+    // paused rather than carrying on with sound out of nowhere
     if ($("wait").checked && !playing) $("xml-play").click();
-    else if (!$("wait").checked) resetPlayback();
+    else if (!$("wait").checked) { pausePlayback(); resetStats(); updatePlayhead(); }
   });
 
   // Changing practice settings mid-song picks up from the current spot
   ["wait", "practice-hand"].forEach(id => $(id).addEventListener("change", () => {
     updateStats();
     if (playing) { const p = position(); haltAudio(); startAt(p); }
+    else lightPlayhead(playhead()); // the lit keys follow the practised hand
   }));
 
 
 
   // ---------- Bottom bar UI: icons, tooltips, pop-outs ----------
   // Phosphor icons (MIT, phosphoricons.com), inlined so the page works offline
-  const ICONS = {"device-mobile":"<path d=\"M176,16H80A24,24,0,0,0,56,40V216a24,24,0,0,0,24,24h96a24,24,0,0,0,24-24V40A24,24,0,0,0,176,16ZM72,64H184V192H72Zm8-32h96a8,8,0,0,1,8,8v8H72V40A8,8,0,0,1,80,32Zm96,192H80a8,8,0,0,1-8-8v-8H184v8A8,8,0,0,1,176,224Z\"/>","text-aa":"<path d=\"M87.24,52.59a8,8,0,0,0-14.48,0l-64,136a8,8,0,1,0,14.48,6.81L39.9,160h80.2l16.66,35.4a8,8,0,1,0,14.48-6.81ZM47.43,144,80,74.79,112.57,144ZM200,96c-12.76,0-22.73,3.47-29.63,10.32a8,8,0,0,0,11.26,11.36c3.8-3.77,10-5.68,18.37-5.68,13.23,0,24,9,24,20v3.22A42.76,42.76,0,0,0,200,128c-22.06,0-40,16.15-40,36s17.94,36,40,36a42.73,42.73,0,0,0,24-7.25,8,8,0,0,0,16-.75V132C240,112.15,222.06,96,200,96Zm0,88c-13.23,0-24-9-24-20s10.77-20,24-20,24,9,24,20S213.23,184,200,184Z\"/>","treble-clef":"<path d=\"M94,220c2,22,40,20,38-6L118,56c-3-32,32-44,38-12,8,40-92,62-92,116,0,34,30,52,60,52,36,0,64-24,64-54,0-26-22-46-50-46-22,0-40,16-40,36,0,14,10,24,24,26\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"16\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>","bass-clef":"<path d=\"M64,112c0-36,28-60,60-60,34,0,56,24,56,56,0,52-56,90-124,108\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"16\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"76\" cy=\"112\" r=\"18\"/><circle cx=\"218\" cy=\"84\" r=\"12\"/><circle cx=\"218\" cy=\"136\" r=\"12\"/>","sharp-flat":"<path d=\"M52,64V200M92,56V192M28,116l88-20M28,164l88-20M164,40V200c28-8,60-28,60-56,0-32-44-32-60-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"16\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>","ledger-lines":"<path d=\"M48,96H208M48,176H208\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"16\" stroke-linecap=\"round\"/><ellipse cx=\"128\" cy=\"96\" rx=\"36\" ry=\"27\" transform=\"rotate(-20 128 96)\"/>","eye-slash":"<path d=\"M53.92,34.62A8,8,0,1,0,42.08,45.38L61.32,66.55C25,88.84,9.38,123.2,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208a127.11,127.11,0,0,0,52.07-10.83l22,24.21a8,8,0,1,0,11.84-10.76Zm47.33,75.84,41.67,45.85a32,32,0,0,1-41.67-45.85ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.16,133.16,0,0,1,25,128c4.69-8.79,19.66-33.39,47.35-49.38l18,19.75a48,48,0,0,0,63.66,70l14.73,16.2A112,112,0,0,1,128,192Zm6-95.43a8,8,0,0,1,3-15.72,48.16,48.16,0,0,1,38.77,42.64,8,8,0,0,1-7.22,8.71,6.39,6.39,0,0,1-.75,0,8,8,0,0,1-8-7.26A32.09,32.09,0,0,0,134,96.57Zm113.28,34.69c-.42.94-10.55,23.37-33.36,43.8a8,8,0,1,1-10.67-11.92A132.77,132.77,0,0,0,231.05,128a133.15,133.15,0,0,0-23.12-30.77C185.67,75.19,158.78,64,128,64a118.37,118.37,0,0,0-19.36,1.57A8,8,0,1,1,106,49.79,134,134,0,0,1,128,48c34.88,0,66.57,13.26,91.66,38.35,18.83,18.83,27.3,37.62,27.65,38.41A8,8,0,0,1,247.31,131.26Z\"/>","eye":"<path d=\"M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.34c18.83-18.83,27.3-37.61,27.65-38.4A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128C223.84,141.46,192.43,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z\"/>","play":"<path d=\"M240,128a15.74,15.74,0,0,1-7.6,13.51L88.32,229.65a16,16,0,0,1-16.2.3A15.86,15.86,0,0,1,64,216.13V39.87a15.86,15.86,0,0,1,8.12-13.82,16,16,0,0,1,16.2.3L232.4,114.49A15.74,15.74,0,0,1,240,128Z\"/>","pause":"<path d=\"M216,48V208a16,16,0,0,1-16,16H160a16,16,0,0,1-16-16V48a16,16,0,0,1,16-16h40A16,16,0,0,1,216,48ZM96,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H96a16,16,0,0,0,16-16V48A16,16,0,0,0,96,32Z\"/>","stop":"<path d=\"M216,56V200a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V56A16,16,0,0,1,56,40H200A16,16,0,0,1,216,56Z\"/>","metronome":"<path d=\"M187.14,114.84l26.78-29.46a8,8,0,0,0-11.84-10.76l-20.55,22.6-17.2-54.07A15.94,15.94,0,0,0,149.08,32H106.91A15.94,15.94,0,0,0,91.66,43.15l-50.91,160A16,16,0,0,0,56,224H200a16,16,0,0,0,15.25-20.85ZM184.72,160H146.08l28.62-31.48ZM106.91,48h42.17l20,62.9L124.46,160H71.27ZM56,208l10.18-32H189.81L200,208Z\"/>","speaker-high":"<path d=\"M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55Zm54-106.08a40,40,0,0,1,0,52.88,8,8,0,0,1-12-10.58,24,24,0,0,0,0-31.72,8,8,0,0,1,12-10.58ZM248,128a79.9,79.9,0,0,1-20.37,53.34,8,8,0,0,1-11.92-10.67,64,64,0,0,0,0-85.33,8,8,0,1,1,11.92-10.67A79.83,79.83,0,0,1,248,128Z\"/>","speaker-low":"<path d=\"M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55ZM208,128a39.93,39.93,0,0,1-10,26.46,8,8,0,0,1-12-10.58,24,24,0,0,0,0-31.72,8,8,0,1,1,12-10.58A40,40,0,0,1,208,128Z\"/>","speaker-x":"<path d=\"M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55Zm101.66-61.3a8,8,0,0,1-11.32,11.32L216,139.31l-18.34,18.35a8,8,0,0,1-11.32-11.32L204.69,128l-18.35-18.34a8,8,0,0,1,11.32-11.32L216,116.69l18.34-18.35a8,8,0,0,1,11.32,11.32L227.31,128Z\"/>","repeat":"<path d=\"M24,128A72.08,72.08,0,0,1,96,56H204.69L194.34,45.66a8,8,0,0,1,11.32-11.32l24,24a8,8,0,0,1,0,11.32l-24,24a8,8,0,0,1-11.32-11.32L204.69,72H96a56.06,56.06,0,0,0-56,56,8,8,0,0,1-16,0Zm200-8a8,8,0,0,0-8,8,56.06,56.06,0,0,1-56,56H51.31l10.35-10.34a8,8,0,0,0-11.32-11.32l-24,24a8,8,0,0,0,0,11.32l24,24a8,8,0,0,0,11.32-11.32L51.31,200H160a72.08,72.08,0,0,0,72-72A8,8,0,0,0,224,120Z\"/>","flag":"<path d=\"M42.76,50A8,8,0,0,0,40,56V224a8,8,0,0,0,16,0V179.77c26.79-21.16,49.87-9.75,76.45,3.41,16.4,8.11,34.06,16.85,53,16.85,13.93,0,28.54-4.75,43.82-18a8,8,0,0,0,2.76-6V56A8,8,0,0,0,218.76,50c-28,24.23-51.72,12.49-79.21-1.12C111.07,34.76,78.78,18.79,42.76,50ZM216,172.25c-26.79,21.16-49.87,9.74-76.45-3.41-25-12.35-52.81-26.13-83.55-8.4V59.79c26.79-21.16,49.87-9.75,76.45,3.4,25,12.35,52.82,26.13,83.55,8.4Z\"/>","flag-checkered":"<path d=\"M227.32,48.75A8,8,0,0,0,218.76,50c-28,24.22-51.72,12.48-79.21-1.13C111.07,34.76,78.78,18.79,42.76,50A8,8,0,0,0,40,56V224a8,8,0,0,0,16,0V179.77c26.79-21.16,49.87-9.75,76.45,3.41,28.49,14.09,60.77,30.06,96.79-1.13a8,8,0,0,0,2.76-6V56A8,8,0,0,0,227.32,48.75ZM216,71.6v40.65c-14,11.06-27,13.22-40,10.88V79.34A60.05,60.05,0,0,0,216,71.6Zm-56,3.76v43c-6.66-2.67-13.43-6-20.45-9.48-8.82-4.37-18-8.91-27.55-12.18v-43c6.66,2.66,13.43,6,20.45,9.48C141.27,67.55,150.46,72.09,160,75.36ZM96,48.91V92.69a60.06,60.06,0,0,0-40,7.75V59.78C70,48.72,83,46.57,96,48.91ZM86.58,152A60.06,60.06,0,0,0,56,160.43V119.78c14-11.06,27-13.22,40-10.88v43.8A65.61,65.61,0,0,0,86.58,152ZM112,156.67v-43c6.66,2.66,13.43,6,20.45,9.48,8.82,4.37,18,8.9,27.55,12.17v43c-6.66-2.67-13.43-6-20.45-9.48C130.73,164.47,121.54,159.94,112,156.67Zm64,26.45v-43.8a65.61,65.61,0,0,0,9.42.72A60.11,60.11,0,0,0,216,131.57v40.68C202,183.31,189,185.46,176,183.12Z\"/>","x-circle":"<path d=\"M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z\"/>","map-pin":"<path d=\"M128,64a40,40,0,1,0,40,40A40,40,0,0,0,128,64Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,128Zm0-112a88.1,88.1,0,0,0-88,88c0,31.4,14.51,64.68,42,96.25a254.19,254.19,0,0,0,41.45,38.3,8,8,0,0,0,9.18,0A254.19,254.19,0,0,0,174,200.25c27.45-31.57,42-64.85,42-96.25A88.1,88.1,0,0,0,128,16Zm0,206c-16.53-13-72-60.75-72-118a72,72,0,0,1,144,0C200,161.23,144.53,209,128,222Z\"/>","hand":"<path d=\"M188,48a27.75,27.75,0,0,0-12,2.71V44a28,28,0,0,0-54.65-8.6A28,28,0,0,0,80,60v64l-3.82-6.13a28,28,0,0,0-48.6,27.82c16,33.77,28.93,57.72,43.72,72.69C86.24,233.54,103.2,240,128,240a88.1,88.1,0,0,0,88-88V76A28,28,0,0,0,188,48Zm12,104a72.08,72.08,0,0,1-72,72c-20.38,0-33.51-4.88-45.33-16.85C69.44,193.74,57.26,171,41.9,138.58a6.36,6.36,0,0,0-.3-.58,12,12,0,0,1,20.79-12,1.76,1.76,0,0,0,.14.23l18.67,30A8,8,0,0,0,96,152V60a12,12,0,0,1,24,0v60a8,8,0,0,0,16,0V44a12,12,0,0,1,24,0v76a8,8,0,0,0,16,0V76a12,12,0,0,1,24,0Z\"/>","hourglass":"<path d=\"M200,75.64V40a16,16,0,0,0-16-16H72A16,16,0,0,0,56,40V76a16.07,16.07,0,0,0,6.4,12.8L114.67,128,62.4,167.2A16.07,16.07,0,0,0,56,180v36a16,16,0,0,0,16,16H184a16,16,0,0,0,16-16V180.36a16.09,16.09,0,0,0-6.35-12.77L141.27,128l52.38-39.6A16.05,16.05,0,0,0,200,75.64ZM184,216H72V180l56-42,56,42.35Zm0-140.36L128,118,72,76V40H184Z\"/>","arrows-vertical":"<path d=\"M165.66,194.34a8,8,0,0,1,0,11.32l-32,32a8,8,0,0,1-11.32,0l-32-32a8,8,0,0,1,11.32-11.32L120,212.69V43.31L101.66,61.66A8,8,0,0,1,90.34,50.34l32-32a8,8,0,0,1,11.32,0l32,32a8,8,0,0,1-11.32,11.32L136,43.31V212.69l18.34-18.35A8,8,0,0,1,165.66,194.34Z\"/>","target":"<path d=\"M221.87,83.16A104.1,104.1,0,1,1,195.67,49l22.67-22.68a8,8,0,0,1,11.32,11.32l-96,96a8,8,0,0,1-11.32-11.32l27.72-27.72a40,40,0,1,0,17.87,31.09,8,8,0,1,1,16-.9,56,56,0,1,1-22.38-41.65L184.3,60.39a87.88,87.88,0,1,0,23.13,29.67,8,8,0,0,1,14.44-6.9Z\"/>","minus":"<path d=\"M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z\"/>","plus":"<path d=\"M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z\"/>","books":"<path d=\"M231.65,194.55,198.46,36.75a16,16,0,0,0-19-12.39L132.65,34.42a16.08,16.08,0,0,0-12.3,19l33.19,157.8A16,16,0,0,0,169.16,224a16.25,16.25,0,0,0,3.38-.36l46.81-10.06A16.09,16.09,0,0,0,231.65,194.55ZM136,50.15c0-.06,0-.09,0-.09l46.8-10,3.33,15.87L139.33,66Zm6.62,31.47,46.82-10.05,3.34,15.9L146,97.53Zm6.64,31.57,46.82-10.06,13.3,63.24-46.82,10.06ZM216,197.94l-46.8,10-3.33-15.87L212.67,182,216,197.85C216,197.91,216,197.94,216,197.94ZM104,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V48A16,16,0,0,0,104,32ZM56,48h48V64H56Zm0,32h48v96H56Zm48,128H56V192h48v16Z\"/>","music-notes":"<path d=\"M212.92,17.69a8,8,0,0,0-6.86-1.45l-128,32A8,8,0,0,0,72,56V166.08A36,36,0,1,0,88,196V110.25l112-28v51.83A36,36,0,1,0,216,164V24A8,8,0,0,0,212.92,17.69ZM52,216a20,20,0,1,1,20-20A20,20,0,0,1,52,216ZM88,93.75V62.25l112-28v31.5ZM180,184a20,20,0,1,1,20-20A20,20,0,0,1,180,184Z\"/>","gear-six":"<path d=\"M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm109.94-52.79a8,8,0,0,0-3.89-5.4l-29.83-17-.12-33.62a8,8,0,0,0-2.83-6.08,111.91,111.91,0,0,0-36.72-20.67,8,8,0,0,0-6.46.59L128,41.85,97.88,25a8,8,0,0,0-6.47-.6A112.1,112.1,0,0,0,54.73,45.15a8,8,0,0,0-2.83,6.07l-.15,33.65-29.83,17a8,8,0,0,0-3.89,5.4,106.47,106.47,0,0,0,0,41.56,8,8,0,0,0,3.89,5.4l29.83,17,.12,33.62a8,8,0,0,0,2.83,6.08,111.91,111.91,0,0,0,36.72,20.67,8,8,0,0,0,6.46-.59L128,214.15,158.12,231a7.91,7.91,0,0,0,3.9,1,8.09,8.09,0,0,0,2.57-.42,112.1,112.1,0,0,0,36.68-20.73,8,8,0,0,0,2.83-6.07l.15-33.65,29.83-17a8,8,0,0,0,3.89-5.4A106.47,106.47,0,0,0,237.94,107.21Zm-15,34.91-28.57,16.25a8,8,0,0,0-3,3c-.58,1-1.19,2.06-1.81,3.06a7.94,7.94,0,0,0-1.22,4.21l-.15,32.25a95.89,95.89,0,0,1-25.37,14.3L134,199.13a8,8,0,0,0-3.91-1h-.19c-1.21,0-2.43,0-3.64,0a8.08,8.08,0,0,0-4.1,1l-28.84,16.1A96,96,0,0,1,67.88,201l-.11-32.2a8,8,0,0,0-1.22-4.22c-.62-1-1.23-2-1.8-3.06a8.09,8.09,0,0,0-3-3.06l-28.6-16.29a90.49,90.49,0,0,1,0-28.26L61.67,97.63a8,8,0,0,0,3-3c.58-1,1.19-2.06,1.81-3.06a7.94,7.94,0,0,0,1.22-4.21l.15-32.25a95.89,95.89,0,0,1,25.37-14.3L122,56.87a8,8,0,0,0,4.1,1c1.21,0,2.43,0,3.64,0a8.08,8.08,0,0,0,4.1-1l28.84-16.1A96,96,0,0,1,188.12,55l.11,32.2a8,8,0,0,0,1.22,4.22c.62,1,1.23,2,1.8,3.06a8.09,8.09,0,0,0,3,3.06l28.6,16.29A90.49,90.49,0,0,1,222.9,142.12Z\"/>","plugs":"<path d=\"M149.66,138.34a8,8,0,0,0-11.32,0L120,156.69,99.31,136l18.35-18.34a8,8,0,0,0-11.32-11.32L88,124.69,69.66,106.34a8,8,0,0,0-11.32,11.32L64.69,124,41.37,147.31a32,32,0,0,0,0,45.26l5.38,5.37-28.41,28.4a8,8,0,0,0,11.32,11.32l28.4-28.41,5.37,5.38a32,32,0,0,0,45.26,0L132,191.31l6.34,6.35a8,8,0,0,0,11.32-11.32L131.31,168l18.35-18.34A8,8,0,0,0,149.66,138.34Zm-52.29,65a16,16,0,0,1-22.62,0L52.69,181.25a16,16,0,0,1,0-22.62L76,135.31,120.69,180Zm140.29-185a8,8,0,0,0-11.32,0l-28.4,28.41-5.37-5.38a32.05,32.05,0,0,0-45.26,0L124,64.69l-6.34-6.35a8,8,0,0,0-11.32,11.32l80,80a8,8,0,0,0,11.32-11.32L191.31,132l23.32-23.31a32,32,0,0,0,0-45.26l-5.38-5.37,28.41-28.4A8,8,0,0,0,237.66,18.34Zm-34.35,79L180,120.69,135.31,76l23.32-23.31a16,16,0,0,1,22.62,0l22.06,22A16,16,0,0,1,203.31,97.37Z\"/>","plugs-connected":"<path d=\"M237.66,18.34a8,8,0,0,0-11.32,0l-52.4,52.41-5.37-5.38a32.05,32.05,0,0,0-45.26,0L100,88.69l-6.34-6.35A8,8,0,0,0,82.34,93.66L88.69,100,65.37,123.31a32,32,0,0,0,0,45.26l5.38,5.37-52.41,52.4a8,8,0,0,0,11.32,11.32l52.4-52.41,5.37,5.38a32,32,0,0,0,45.26,0L156,167.31l6.34,6.35a8,8,0,0,0,11.32-11.32L167.31,156l23.32-23.31a32,32,0,0,0,0-45.26l-5.38-5.37,52.41-52.4A8,8,0,0,0,237.66,18.34Zm-116.29,161a16,16,0,0,1-22.62,0L76.69,157.25a16,16,0,0,1,0-22.62L100,111.31,144.69,156Zm57.94-57.94L156,144.69,111.31,100l23.32-23.31a16,16,0,0,1,22.62,0l22.06,22A16,16,0,0,1,179.31,121.37ZM88.57,35A8,8,0,0,1,103.43,29l8,20A8,8,0,0,1,96.57,55ZM24.57,93A8,8,0,0,1,35,88.57l20,8A8,8,0,0,1,49,111.43l-20-8A8,8,0,0,1,24.57,93ZM231.43,163a8,8,0,0,1-10.4,4.46l-20-8A8,8,0,1,1,207,144.57l20,8A8,8,0,0,1,231.43,163Zm-64,58.06A8,8,0,0,1,152.57,227l-8-20A8,8,0,0,1,159.43,201Z\"/>","folder-open":"<path d=\"M245,110.64A16,16,0,0,0,232,104H216V88a16,16,0,0,0-16-16H130.67L102.94,51.2a16.14,16.14,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V208h0a8,8,0,0,0,8,8H211.1a8,8,0,0,0,7.59-5.47l28.49-85.47A16.05,16.05,0,0,0,245,110.64ZM93.34,64,123.2,86.4A8,8,0,0,0,128,88h72v16H69.77a16,16,0,0,0-15.18,10.94L40,158.7V64Zm112,136H43.1l26.67-80H232Z\"/>","sidebar-simple":"<path d=\"M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM40,56H80V200H40ZM216,200H96V56H216V200Z\"/>","eraser":"<path d=\"M225,80.4,183.6,39a24,24,0,0,0-33.94,0L31,157.66a24,24,0,0,0,0,33.94l30.06,30.06A8,8,0,0,0,66.74,224H216a8,8,0,0,0,0-16h-84.7L225,114.34A24,24,0,0,0,225,80.4ZM108.68,208H70.05L42.33,180.28a8,8,0,0,1,0-11.31L96,115.31,148.69,168Zm105-105L160,156.69,107.31,104,161,50.34a8,8,0,0,1,11.32,0l41.38,41.38a8,8,0,0,1,0,11.31Z\"/>","x":"<path d=\"M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z\"/>","file-arrow-up":"<path d=\"M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Zm-42.34-77.66a8,8,0,0,1-11.32,11.32L136,139.31V184a8,8,0,0,1-16,0V139.31l-10.34,10.35a8,8,0,0,1-11.32-11.32l24-24a8,8,0,0,1,11.32,0Z\"/>","piano-keys":"<path d=\"M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM80,48h24v88H80Zm32,104a8,8,0,0,0,8-8V48h16v96a8,8,0,0,0,8,8h8v56H104V152Zm40-16V48h24v88ZM48,48H64v96a8,8,0,0,0,8,8H88v56H48ZM208,208H168V152h16a8,8,0,0,0,8-8V48h16V208Z\"/>","highlighter-circle":"<path d=\"M201.54,54.46A104,104,0,0,0,54.46,201.54,104,104,0,0,0,201.54,54.46ZM96,210V152h64v58a88.33,88.33,0,0,1-64,0Zm48-74H112V100.94l32-16Zm46.22,54.22A88.09,88.09,0,0,1,176,201.77V152a16,16,0,0,0-16-16V72a8,8,0,0,0-11.58-7.16l-48,24A8,8,0,0,0,96,96v40a16,16,0,0,0-16,16v49.77a88,88,0,1,1,110.22-11.55Z\"/>","info":"<path d=\"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm16-40a8,8,0,0,1-8,8,16,16,0,0,1-16-16V128a8,8,0,0,1,0-16,16,16,0,0,1,16,16v40A8,8,0,0,1,144,176ZM112,84a12,12,0,1,1,12,12A12,12,0,0,1,112,84Z\"/>","caret-down":"<path d=\"M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z\"/>","cursor-click":"<path d=\"M88,24V16a8,8,0,0,1,16,0v8a8,8,0,0,1-16,0ZM16,104h8a8,8,0,0,0,0-16H16a8,8,0,0,0,0,16ZM124.42,39.16a8,8,0,0,0,10.74-3.58l8-16a8,8,0,0,0-14.31-7.16l-8,16A8,8,0,0,0,124.42,39.16Zm-96,81.69-16,8a8,8,0,0,0,7.16,14.31l16-8a8,8,0,1,0-7.16-14.31ZM219.31,184a16,16,0,0,1,0,22.63l-12.68,12.68a16,16,0,0,1-22.63,0L132.7,168,115,214.09c0,.1-.08.21-.13.32a15.83,15.83,0,0,1-14.6,9.59l-.79,0a15.83,15.83,0,0,1-14.41-11L32.8,52.92A16,16,0,0,1,52.92,32.8L213,85.07a16,16,0,0,1,1.41,29.8l-.32.13L168,132.69ZM208,195.31,156.69,144h0a16,16,0,0,1,4.93-26l.32-.14,45.95-17.64L48,48l52.2,159.86,17.65-46c0-.11.08-.22.13-.33a16,16,0,0,1,11.69-9.34,16.72,16.72,0,0,1,3-.28,16,16,0,0,1,11.3,4.69L195.31,208Z\"/>","arrow-counter-clockwise":"<path d=\"M224,128a96,96,0,0,1-94.71,96H128A95.38,95.38,0,0,1,62.1,197.8a8,8,0,0,1,11-11.63A80,80,0,1,0,71.43,71.39a3.07,3.07,0,0,1-.26.25L44.59,96H72a8,8,0,0,1,0,16H24a8,8,0,0,1-8-8V56a8,8,0,0,1,16,0V85.8L60.25,60A96,96,0,0,1,224,128Z\"/>","pencil-simple":"<path d=\"M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z\"/>","trash":"<path d=\"M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z\"/>","magnifying-glass":"<path d=\"M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z\"/>","plus-circle":"<path d=\"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm48-88a8,8,0,0,1-8,8H136v32a8,8,0,0,1-16,0V136H88a8,8,0,0,1,0-16h32V88a8,8,0,0,1,16,0v32h32A8,8,0,0,1,176,128Z\"/>","check":"<path d=\"M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z\"/>","ear":"<path d=\"M216,104a8,8,0,0,1-16,0,72,72,0,0,0-144,0c0,26.7,8.53,34.92,17.57,43.64C82.21,156,92,165.41,92,188a36,36,0,0,0,36,36c10.24,0,18.45-4.16,25.83-13.09a8,8,0,1,1,12.34,10.18C155.81,233.64,143,240,128,240a52.06,52.06,0,0,1-52-52c0-15.79-5.68-21.27-13.54-28.84C52.46,149.5,40,137.5,40,104a88,88,0,0,1,176,0Zm-38.13,57.08A8,8,0,0,0,166.93,164,8,8,0,0,1,152,160c0-9.33,4.82-15.76,10.4-23.2,6.37-8.5,13.6-18.13,13.6-32.8a48,48,0,0,0-96,0,8,8,0,0,0,16,0,32,32,0,0,1,64,0c0,9.33-4.82,15.76-10.4,23.2-6.37,8.5-13.6,18.13-13.6,32.8a24,24,0,0,0,44.78,12A8,8,0,0,0,177.87,161.08Z\"/>","arrow-clockwise":"<path d=\"M240,56v48a8,8,0,0,1-8,8H184a8,8,0,0,1,0-16H211.4L184.81,71.64l-.25-.24a80,80,0,1,0-1.67,114.78,8,8,0,0,1,11,11.63A95.44,95.44,0,0,1,128,224h-1.32A96,96,0,1,1,195.75,60L224,85.8V56a8,8,0,1,1,16,0Z\"/>","chart-line-up":"<path d=\"M232,208a8,8,0,0,1-8,8H32a8,8,0,0,1-8-8V48a8,8,0,0,1,16,0V156.69l50.34-50.35a8,8,0,0,1,11.32,0L128,132.69,180.69,80H160a8,8,0,0,1,0-16h40a8,8,0,0,1,8,8v40a8,8,0,0,1-16,0V91.31l-58.34,58.35a8,8,0,0,1-11.32,0L96,123.31l-56,56V200H224A8,8,0,0,1,232,208Z\"/>"};
+  const ICONS = {"device-mobile":"<path d=\"M176,16H80A24,24,0,0,0,56,40V216a24,24,0,0,0,24,24h96a24,24,0,0,0,24-24V40A24,24,0,0,0,176,16ZM72,64H184V192H72Zm8-32h96a8,8,0,0,1,8,8v8H72V40A8,8,0,0,1,80,32Zm96,192H80a8,8,0,0,1-8-8v-8H184v8A8,8,0,0,1,176,224Z\"/>","text-aa":"<path d=\"M87.24,52.59a8,8,0,0,0-14.48,0l-64,136a8,8,0,1,0,14.48,6.81L39.9,160h80.2l16.66,35.4a8,8,0,1,0,14.48-6.81ZM47.43,144,80,74.79,112.57,144ZM200,96c-12.76,0-22.73,3.47-29.63,10.32a8,8,0,0,0,11.26,11.36c3.8-3.77,10-5.68,18.37-5.68,13.23,0,24,9,24,20v3.22A42.76,42.76,0,0,0,200,128c-22.06,0-40,16.15-40,36s17.94,36,40,36a42.73,42.73,0,0,0,24-7.25,8,8,0,0,0,16-.75V132C240,112.15,222.06,96,200,96Zm0,88c-13.23,0-24-9-24-20s10.77-20,24-20,24,9,24,20S213.23,184,200,184Z\"/>","treble-clef":"<path d=\"M94,220c2,22,40,20,38-6L118,56c-3-32,32-44,38-12,8,40-92,62-92,116,0,34,30,52,60,52,36,0,64-24,64-54,0-26-22-46-50-46-22,0-40,16-40,36,0,14,10,24,24,26\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"16\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>","bass-clef":"<path d=\"M64,112c0-36,28-60,60-60,34,0,56,24,56,56,0,52-56,90-124,108\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"16\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"76\" cy=\"112\" r=\"18\"/><circle cx=\"218\" cy=\"84\" r=\"12\"/><circle cx=\"218\" cy=\"136\" r=\"12\"/>","sharp-flat":"<path d=\"M52,64V200M92,56V192M28,116l88-20M28,164l88-20M164,40V200c28-8,60-28,60-56,0-32-44-32-60-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"16\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>","ledger-lines":"<path d=\"M48,96H208M48,176H208\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"16\" stroke-linecap=\"round\"/><ellipse cx=\"128\" cy=\"96\" rx=\"36\" ry=\"27\" transform=\"rotate(-20 128 96)\"/>","eye-slash":"<path d=\"M53.92,34.62A8,8,0,1,0,42.08,45.38L61.32,66.55C25,88.84,9.38,123.2,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208a127.11,127.11,0,0,0,52.07-10.83l22,24.21a8,8,0,1,0,11.84-10.76Zm47.33,75.84,41.67,45.85a32,32,0,0,1-41.67-45.85ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.16,133.16,0,0,1,25,128c4.69-8.79,19.66-33.39,47.35-49.38l18,19.75a48,48,0,0,0,63.66,70l14.73,16.2A112,112,0,0,1,128,192Zm6-95.43a8,8,0,0,1,3-15.72,48.16,48.16,0,0,1,38.77,42.64,8,8,0,0,1-7.22,8.71,6.39,6.39,0,0,1-.75,0,8,8,0,0,1-8-7.26A32.09,32.09,0,0,0,134,96.57Zm113.28,34.69c-.42.94-10.55,23.37-33.36,43.8a8,8,0,1,1-10.67-11.92A132.77,132.77,0,0,0,231.05,128a133.15,133.15,0,0,0-23.12-30.77C185.67,75.19,158.78,64,128,64a118.37,118.37,0,0,0-19.36,1.57A8,8,0,1,1,106,49.79,134,134,0,0,1,128,48c34.88,0,66.57,13.26,91.66,38.35,18.83,18.83,27.3,37.62,27.65,38.41A8,8,0,0,1,247.31,131.26Z\"/>","eye":"<path d=\"M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.34c18.83-18.83,27.3-37.61,27.65-38.4A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128C223.84,141.46,192.43,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z\"/>","play":"<path d=\"M240,128a15.74,15.74,0,0,1-7.6,13.51L88.32,229.65a16,16,0,0,1-16.2.3A15.86,15.86,0,0,1,64,216.13V39.87a15.86,15.86,0,0,1,8.12-13.82,16,16,0,0,1,16.2.3L232.4,114.49A15.74,15.74,0,0,1,240,128Z\"/>","pause":"<path d=\"M216,48V208a16,16,0,0,1-16,16H160a16,16,0,0,1-16-16V48a16,16,0,0,1,16-16h40A16,16,0,0,1,216,48ZM96,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H96a16,16,0,0,0,16-16V48A16,16,0,0,0,96,32Z\"/>","stop":"<path d=\"M216,56V200a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V56A16,16,0,0,1,56,40H200A16,16,0,0,1,216,56Z\"/>","metronome":"<path d=\"M187.14,114.84l26.78-29.46a8,8,0,0,0-11.84-10.76l-20.55,22.6-17.2-54.07A15.94,15.94,0,0,0,149.08,32H106.91A15.94,15.94,0,0,0,91.66,43.15l-50.91,160A16,16,0,0,0,56,224H200a16,16,0,0,0,15.25-20.85ZM184.72,160H146.08l28.62-31.48ZM106.91,48h42.17l20,62.9L124.46,160H71.27ZM56,208l10.18-32H189.81L200,208Z\"/>","speaker-high":"<path d=\"M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55Zm54-106.08a40,40,0,0,1,0,52.88,8,8,0,0,1-12-10.58,24,24,0,0,0,0-31.72,8,8,0,0,1,12-10.58ZM248,128a79.9,79.9,0,0,1-20.37,53.34,8,8,0,0,1-11.92-10.67,64,64,0,0,0,0-85.33,8,8,0,1,1,11.92-10.67A79.83,79.83,0,0,1,248,128Z\"/>","speaker-low":"<path d=\"M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55ZM208,128a39.93,39.93,0,0,1-10,26.46,8,8,0,0,1-12-10.58,24,24,0,0,0,0-31.72,8,8,0,1,1,12-10.58A40,40,0,0,1,208,128Z\"/>","speaker-x":"<path d=\"M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55Zm101.66-61.3a8,8,0,0,1-11.32,11.32L216,139.31l-18.34,18.35a8,8,0,0,1-11.32-11.32L204.69,128l-18.35-18.34a8,8,0,0,1,11.32-11.32L216,116.69l18.34-18.35a8,8,0,0,1,11.32,11.32L227.31,128Z\"/>","repeat":"<path d=\"M24,128A72.08,72.08,0,0,1,96,56H204.69L194.34,45.66a8,8,0,0,1,11.32-11.32l24,24a8,8,0,0,1,0,11.32l-24,24a8,8,0,0,1-11.32-11.32L204.69,72H96a56.06,56.06,0,0,0-56,56,8,8,0,0,1-16,0Zm200-8a8,8,0,0,0-8,8,56.06,56.06,0,0,1-56,56H51.31l10.35-10.34a8,8,0,0,0-11.32-11.32l-24,24a8,8,0,0,0,0,11.32l24,24a8,8,0,0,0,11.32-11.32L51.31,200H160a72.08,72.08,0,0,0,72-72A8,8,0,0,0,224,120Z\"/>","flag":"<path d=\"M42.76,50A8,8,0,0,0,40,56V224a8,8,0,0,0,16,0V179.77c26.79-21.16,49.87-9.75,76.45,3.41,16.4,8.11,34.06,16.85,53,16.85,13.93,0,28.54-4.75,43.82-18a8,8,0,0,0,2.76-6V56A8,8,0,0,0,218.76,50c-28,24.23-51.72,12.49-79.21-1.12C111.07,34.76,78.78,18.79,42.76,50ZM216,172.25c-26.79,21.16-49.87,9.74-76.45-3.41-25-12.35-52.81-26.13-83.55-8.4V59.79c26.79-21.16,49.87-9.75,76.45,3.4,25,12.35,52.82,26.13,83.55,8.4Z\"/>","flag-checkered":"<path d=\"M227.32,48.75A8,8,0,0,0,218.76,50c-28,24.22-51.72,12.48-79.21-1.13C111.07,34.76,78.78,18.79,42.76,50A8,8,0,0,0,40,56V224a8,8,0,0,0,16,0V179.77c26.79-21.16,49.87-9.75,76.45,3.41,28.49,14.09,60.77,30.06,96.79-1.13a8,8,0,0,0,2.76-6V56A8,8,0,0,0,227.32,48.75ZM216,71.6v40.65c-14,11.06-27,13.22-40,10.88V79.34A60.05,60.05,0,0,0,216,71.6Zm-56,3.76v43c-6.66-2.67-13.43-6-20.45-9.48-8.82-4.37-18-8.91-27.55-12.18v-43c6.66,2.66,13.43,6,20.45,9.48C141.27,67.55,150.46,72.09,160,75.36ZM96,48.91V92.69a60.06,60.06,0,0,0-40,7.75V59.78C70,48.72,83,46.57,96,48.91ZM86.58,152A60.06,60.06,0,0,0,56,160.43V119.78c14-11.06,27-13.22,40-10.88v43.8A65.61,65.61,0,0,0,86.58,152ZM112,156.67v-43c6.66,2.66,13.43,6,20.45,9.48,8.82,4.37,18,8.9,27.55,12.17v43c-6.66-2.67-13.43-6-20.45-9.48C130.73,164.47,121.54,159.94,112,156.67Zm64,26.45v-43.8a65.61,65.61,0,0,0,9.42.72A60.11,60.11,0,0,0,216,131.57v40.68C202,183.31,189,185.46,176,183.12Z\"/>","x-circle":"<path d=\"M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z\"/>","map-pin":"<path d=\"M128,64a40,40,0,1,0,40,40A40,40,0,0,0,128,64Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,128Zm0-112a88.1,88.1,0,0,0-88,88c0,31.4,14.51,64.68,42,96.25a254.19,254.19,0,0,0,41.45,38.3,8,8,0,0,0,9.18,0A254.19,254.19,0,0,0,174,200.25c27.45-31.57,42-64.85,42-96.25A88.1,88.1,0,0,0,128,16Zm0,206c-16.53-13-72-60.75-72-118a72,72,0,0,1,144,0C200,161.23,144.53,209,128,222Z\"/>","hand":"<path d=\"M188,48a27.75,27.75,0,0,0-12,2.71V44a28,28,0,0,0-54.65-8.6A28,28,0,0,0,80,60v64l-3.82-6.13a28,28,0,0,0-48.6,27.82c16,33.77,28.93,57.72,43.72,72.69C86.24,233.54,103.2,240,128,240a88.1,88.1,0,0,0,88-88V76A28,28,0,0,0,188,48Zm12,104a72.08,72.08,0,0,1-72,72c-20.38,0-33.51-4.88-45.33-16.85C69.44,193.74,57.26,171,41.9,138.58a6.36,6.36,0,0,0-.3-.58,12,12,0,0,1,20.79-12,1.76,1.76,0,0,0,.14.23l18.67,30A8,8,0,0,0,96,152V60a12,12,0,0,1,24,0v60a8,8,0,0,0,16,0V44a12,12,0,0,1,24,0v76a8,8,0,0,0,16,0V76a12,12,0,0,1,24,0Z\"/>","hourglass":"<path d=\"M200,75.64V40a16,16,0,0,0-16-16H72A16,16,0,0,0,56,40V76a16.07,16.07,0,0,0,6.4,12.8L114.67,128,62.4,167.2A16.07,16.07,0,0,0,56,180v36a16,16,0,0,0,16,16H184a16,16,0,0,0,16-16V180.36a16.09,16.09,0,0,0-6.35-12.77L141.27,128l52.38-39.6A16.05,16.05,0,0,0,200,75.64ZM184,216H72V180l56-42,56,42.35Zm0-140.36L128,118,72,76V40H184Z\"/>","arrows-vertical":"<path d=\"M165.66,194.34a8,8,0,0,1,0,11.32l-32,32a8,8,0,0,1-11.32,0l-32-32a8,8,0,0,1,11.32-11.32L120,212.69V43.31L101.66,61.66A8,8,0,0,1,90.34,50.34l32-32a8,8,0,0,1,11.32,0l32,32a8,8,0,0,1-11.32,11.32L136,43.31V212.69l18.34-18.35A8,8,0,0,1,165.66,194.34Z\"/>","target":"<path d=\"M221.87,83.16A104.1,104.1,0,1,1,195.67,49l22.67-22.68a8,8,0,0,1,11.32,11.32l-96,96a8,8,0,0,1-11.32-11.32l27.72-27.72a40,40,0,1,0,17.87,31.09,8,8,0,1,1,16-.9,56,56,0,1,1-22.38-41.65L184.3,60.39a87.88,87.88,0,1,0,23.13,29.67,8,8,0,0,1,14.44-6.9Z\"/>","minus":"<path d=\"M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z\"/>","plus":"<path d=\"M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z\"/>","books":"<path d=\"M231.65,194.55,198.46,36.75a16,16,0,0,0-19-12.39L132.65,34.42a16.08,16.08,0,0,0-12.3,19l33.19,157.8A16,16,0,0,0,169.16,224a16.25,16.25,0,0,0,3.38-.36l46.81-10.06A16.09,16.09,0,0,0,231.65,194.55ZM136,50.15c0-.06,0-.09,0-.09l46.8-10,3.33,15.87L139.33,66Zm6.62,31.47,46.82-10.05,3.34,15.9L146,97.53Zm6.64,31.57,46.82-10.06,13.3,63.24-46.82,10.06ZM216,197.94l-46.8,10-3.33-15.87L212.67,182,216,197.85C216,197.91,216,197.94,216,197.94ZM104,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V48A16,16,0,0,0,104,32ZM56,48h48V64H56Zm0,32h48v96H56Zm48,128H56V192h48v16Z\"/>","music-notes":"<path d=\"M212.92,17.69a8,8,0,0,0-6.86-1.45l-128,32A8,8,0,0,0,72,56V166.08A36,36,0,1,0,88,196V110.25l112-28v51.83A36,36,0,1,0,216,164V24A8,8,0,0,0,212.92,17.69ZM52,216a20,20,0,1,1,20-20A20,20,0,0,1,52,216ZM88,93.75V62.25l112-28v31.5ZM180,184a20,20,0,1,1,20-20A20,20,0,0,1,180,184Z\"/>","gear-six":"<path d=\"M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm109.94-52.79a8,8,0,0,0-3.89-5.4l-29.83-17-.12-33.62a8,8,0,0,0-2.83-6.08,111.91,111.91,0,0,0-36.72-20.67,8,8,0,0,0-6.46.59L128,41.85,97.88,25a8,8,0,0,0-6.47-.6A112.1,112.1,0,0,0,54.73,45.15a8,8,0,0,0-2.83,6.07l-.15,33.65-29.83,17a8,8,0,0,0-3.89,5.4,106.47,106.47,0,0,0,0,41.56,8,8,0,0,0,3.89,5.4l29.83,17,.12,33.62a8,8,0,0,0,2.83,6.08,111.91,111.91,0,0,0,36.72,20.67,8,8,0,0,0,6.46-.59L128,214.15,158.12,231a7.91,7.91,0,0,0,3.9,1,8.09,8.09,0,0,0,2.57-.42,112.1,112.1,0,0,0,36.68-20.73,8,8,0,0,0,2.83-6.07l.15-33.65,29.83-17a8,8,0,0,0,3.89-5.4A106.47,106.47,0,0,0,237.94,107.21Zm-15,34.91-28.57,16.25a8,8,0,0,0-3,3c-.58,1-1.19,2.06-1.81,3.06a7.94,7.94,0,0,0-1.22,4.21l-.15,32.25a95.89,95.89,0,0,1-25.37,14.3L134,199.13a8,8,0,0,0-3.91-1h-.19c-1.21,0-2.43,0-3.64,0a8.08,8.08,0,0,0-4.1,1l-28.84,16.1A96,96,0,0,1,67.88,201l-.11-32.2a8,8,0,0,0-1.22-4.22c-.62-1-1.23-2-1.8-3.06a8.09,8.09,0,0,0-3-3.06l-28.6-16.29a90.49,90.49,0,0,1,0-28.26L61.67,97.63a8,8,0,0,0,3-3c.58-1,1.19-2.06,1.81-3.06a7.94,7.94,0,0,0,1.22-4.21l.15-32.25a95.89,95.89,0,0,1,25.37-14.3L122,56.87a8,8,0,0,0,4.1,1c1.21,0,2.43,0,3.64,0a8.08,8.08,0,0,0,4.1-1l28.84-16.1A96,96,0,0,1,188.12,55l.11,32.2a8,8,0,0,0,1.22,4.22c.62,1,1.23,2,1.8,3.06a8.09,8.09,0,0,0,3,3.06l28.6,16.29A90.49,90.49,0,0,1,222.9,142.12Z\"/>","plugs":"<path d=\"M149.66,138.34a8,8,0,0,0-11.32,0L120,156.69,99.31,136l18.35-18.34a8,8,0,0,0-11.32-11.32L88,124.69,69.66,106.34a8,8,0,0,0-11.32,11.32L64.69,124,41.37,147.31a32,32,0,0,0,0,45.26l5.38,5.37-28.41,28.4a8,8,0,0,0,11.32,11.32l28.4-28.41,5.37,5.38a32,32,0,0,0,45.26,0L132,191.31l6.34,6.35a8,8,0,0,0,11.32-11.32L131.31,168l18.35-18.34A8,8,0,0,0,149.66,138.34Zm-52.29,65a16,16,0,0,1-22.62,0L52.69,181.25a16,16,0,0,1,0-22.62L76,135.31,120.69,180Zm140.29-185a8,8,0,0,0-11.32,0l-28.4,28.41-5.37-5.38a32.05,32.05,0,0,0-45.26,0L124,64.69l-6.34-6.35a8,8,0,0,0-11.32,11.32l80,80a8,8,0,0,0,11.32-11.32L191.31,132l23.32-23.31a32,32,0,0,0,0-45.26l-5.38-5.37,28.41-28.4A8,8,0,0,0,237.66,18.34Zm-34.35,79L180,120.69,135.31,76l23.32-23.31a16,16,0,0,1,22.62,0l22.06,22A16,16,0,0,1,203.31,97.37Z\"/>","plugs-connected":"<path d=\"M237.66,18.34a8,8,0,0,0-11.32,0l-52.4,52.41-5.37-5.38a32.05,32.05,0,0,0-45.26,0L100,88.69l-6.34-6.35A8,8,0,0,0,82.34,93.66L88.69,100,65.37,123.31a32,32,0,0,0,0,45.26l5.38,5.37-52.41,52.4a8,8,0,0,0,11.32,11.32l52.4-52.41,5.37,5.38a32,32,0,0,0,45.26,0L156,167.31l6.34,6.35a8,8,0,0,0,11.32-11.32L167.31,156l23.32-23.31a32,32,0,0,0,0-45.26l-5.38-5.37,52.41-52.4A8,8,0,0,0,237.66,18.34Zm-116.29,161a16,16,0,0,1-22.62,0L76.69,157.25a16,16,0,0,1,0-22.62L100,111.31,144.69,156Zm57.94-57.94L156,144.69,111.31,100l23.32-23.31a16,16,0,0,1,22.62,0l22.06,22A16,16,0,0,1,179.31,121.37ZM88.57,35A8,8,0,0,1,103.43,29l8,20A8,8,0,0,1,96.57,55ZM24.57,93A8,8,0,0,1,35,88.57l20,8A8,8,0,0,1,49,111.43l-20-8A8,8,0,0,1,24.57,93ZM231.43,163a8,8,0,0,1-10.4,4.46l-20-8A8,8,0,1,1,207,144.57l20,8A8,8,0,0,1,231.43,163Zm-64,58.06A8,8,0,0,1,152.57,227l-8-20A8,8,0,0,1,159.43,201Z\"/>","folder-open":"<path d=\"M245,110.64A16,16,0,0,0,232,104H216V88a16,16,0,0,0-16-16H130.67L102.94,51.2a16.14,16.14,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V208h0a8,8,0,0,0,8,8H211.1a8,8,0,0,0,7.59-5.47l28.49-85.47A16.05,16.05,0,0,0,245,110.64ZM93.34,64,123.2,86.4A8,8,0,0,0,128,88h72v16H69.77a16,16,0,0,0-15.18,10.94L40,158.7V64Zm112,136H43.1l26.67-80H232Z\"/>","sidebar-simple":"<path d=\"M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM40,56H80V200H40ZM216,200H96V56H216V200Z\"/>","eraser":"<path d=\"M225,80.4,183.6,39a24,24,0,0,0-33.94,0L31,157.66a24,24,0,0,0,0,33.94l30.06,30.06A8,8,0,0,0,66.74,224H216a8,8,0,0,0,0-16h-84.7L225,114.34A24,24,0,0,0,225,80.4ZM108.68,208H70.05L42.33,180.28a8,8,0,0,1,0-11.31L96,115.31,148.69,168Zm105-105L160,156.69,107.31,104,161,50.34a8,8,0,0,1,11.32,0l41.38,41.38a8,8,0,0,1,0,11.31Z\"/>","x":"<path d=\"M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z\"/>","file-arrow-up":"<path d=\"M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Zm-42.34-77.66a8,8,0,0,1-11.32,11.32L136,139.31V184a8,8,0,0,1-16,0V139.31l-10.34,10.35a8,8,0,0,1-11.32-11.32l24-24a8,8,0,0,1,11.32,0Z\"/>","piano-keys":"<path d=\"M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM80,48h24v88H80Zm32,104a8,8,0,0,0,8-8V48h16v96a8,8,0,0,0,8,8h8v56H104V152Zm40-16V48h24v88ZM48,48H64v96a8,8,0,0,0,8,8H88v56H48ZM208,208H168V152h16a8,8,0,0,0,8-8V48h16V208Z\"/>","highlighter-circle":"<path d=\"M201.54,54.46A104,104,0,0,0,54.46,201.54,104,104,0,0,0,201.54,54.46ZM96,210V152h64v58a88.33,88.33,0,0,1-64,0Zm48-74H112V100.94l32-16Zm46.22,54.22A88.09,88.09,0,0,1,176,201.77V152a16,16,0,0,0-16-16V72a8,8,0,0,0-11.58-7.16l-48,24A8,8,0,0,0,96,96v40a16,16,0,0,0-16,16v49.77a88,88,0,1,1,110.22-11.55Z\"/>","info":"<path d=\"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm16-40a8,8,0,0,1-8,8,16,16,0,0,1-16-16V128a8,8,0,0,1,0-16,16,16,0,0,1,16,16v40A8,8,0,0,1,144,176ZM112,84a12,12,0,1,1,12,12A12,12,0,0,1,112,84Z\"/>","caret-down":"<path d=\"M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z\"/>","cursor-click":"<path d=\"M88,24V16a8,8,0,0,1,16,0v8a8,8,0,0,1-16,0ZM16,104h8a8,8,0,0,0,0-16H16a8,8,0,0,0,0,16ZM124.42,39.16a8,8,0,0,0,10.74-3.58l8-16a8,8,0,0,0-14.31-7.16l-8,16A8,8,0,0,0,124.42,39.16Zm-96,81.69-16,8a8,8,0,0,0,7.16,14.31l16-8a8,8,0,1,0-7.16-14.31ZM219.31,184a16,16,0,0,1,0,22.63l-12.68,12.68a16,16,0,0,1-22.63,0L132.7,168,115,214.09c0,.1-.08.21-.13.32a15.83,15.83,0,0,1-14.6,9.59l-.79,0a15.83,15.83,0,0,1-14.41-11L32.8,52.92A16,16,0,0,1,52.92,32.8L213,85.07a16,16,0,0,1,1.41,29.8l-.32.13L168,132.69ZM208,195.31,156.69,144h0a16,16,0,0,1,4.93-26l.32-.14,45.95-17.64L48,48l52.2,159.86,17.65-46c0-.11.08-.22.13-.33a16,16,0,0,1,11.69-9.34,16.72,16.72,0,0,1,3-.28,16,16,0,0,1,11.3,4.69L195.31,208Z\"/>","arrow-counter-clockwise":"<path d=\"M224,128a96,96,0,0,1-94.71,96H128A95.38,95.38,0,0,1,62.1,197.8a8,8,0,0,1,11-11.63A80,80,0,1,0,71.43,71.39a3.07,3.07,0,0,1-.26.25L44.59,96H72a8,8,0,0,1,0,16H24a8,8,0,0,1-8-8V56a8,8,0,0,1,16,0V85.8L60.25,60A96,96,0,0,1,224,128Z\"/>","pencil-simple":"<path d=\"M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z\"/>","trash":"<path d=\"M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z\"/>","magnifying-glass":"<path d=\"M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z\"/>","plus-circle":"<path d=\"M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm48-88a8,8,0,0,1-8,8H136v32a8,8,0,0,1-16,0V136H88a8,8,0,0,1,0-16h32V88a8,8,0,0,1,16,0v32h32A8,8,0,0,1,176,128Z\"/>","check":"<path d=\"M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z\"/>","ear":"<path d=\"M216,104a8,8,0,0,1-16,0,72,72,0,0,0-144,0c0,26.7,8.53,34.92,17.57,43.64C82.21,156,92,165.41,92,188a36,36,0,0,0,36,36c10.24,0,18.45-4.16,25.83-13.09a8,8,0,1,1,12.34,10.18C155.81,233.64,143,240,128,240a52.06,52.06,0,0,1-52-52c0-15.79-5.68-21.27-13.54-28.84C52.46,149.5,40,137.5,40,104a88,88,0,0,1,176,0Zm-38.13,57.08A8,8,0,0,0,166.93,164,8,8,0,0,1,152,160c0-9.33,4.82-15.76,10.4-23.2,6.37-8.5,13.6-18.13,13.6-32.8a48,48,0,0,0-96,0,8,8,0,0,0,16,0,32,32,0,0,1,64,0c0,9.33-4.82,15.76-10.4,23.2-6.37,8.5-13.6,18.13-13.6,32.8a24,24,0,0,0,44.78,12A8,8,0,0,0,177.87,161.08Z\"/>","arrow-clockwise":"<path d=\"M240,56v48a8,8,0,0,1-8,8H184a8,8,0,0,1,0-16H211.4L184.81,71.64l-.25-.24a80,80,0,1,0-1.67,114.78,8,8,0,0,1,11,11.63A95.44,95.44,0,0,1,128,224h-1.32A96,96,0,1,1,195.75,60L224,85.8V56a8,8,0,1,1,16,0Z\"/>","chart-line-up":"<path d=\"M232,208a8,8,0,0,1-8,8H32a8,8,0,0,1-8-8V48a8,8,0,0,1,16,0V156.69l50.34-50.35a8,8,0,0,1,11.32,0L128,132.69,180.69,80H160a8,8,0,0,1,0-16h40a8,8,0,0,1,8,8v40a8,8,0,0,1-16,0V91.31l-58.34,58.35a8,8,0,0,1-11.32,0L96,123.31l-56,56V200H224A8,8,0,0,1,232,208Z\"/>","repeat-sign":"<path d=\"M116,48V208\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"16\" stroke-linecap=\"round\"/><rect x=\"152\" y=\"40\" width=\"32\" height=\"176\" rx=\"8\"/><circle cx=\"68\" cy=\"100\" r=\"15\"/><circle cx=\"68\" cy=\"156\" r=\"15\"/><path class=\"slash\" d=\"M40,32L216,224\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"16\" stroke-linecap=\"round\"/>"};
   const iconSvg = name => `<span class="ic"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor">${ICONS[name]}</svg></span>`;
   function setIcon(el, name) {
     el.dataset.ic = name;
@@ -3444,7 +3635,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   function setPlayState(state) {
     const btn = $("xml-play");
     setIcon(btn.querySelector(".ic"), state === "pause" ? "pause" : "play");
-    btn.dataset.tip = state === "pause" ? "Pause" : state === "resume" ? "Resume" : "Play from the start point";
+    btn.dataset.tip = state === "pause" ? "Pause" : state === "resume" ? "Resume" : "Play from the start";
   }
   setPlayState("play");
 
@@ -3484,7 +3675,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     sightSimplePiano();
     checkPianoFit();
     saveUi();
-    renderKeys();
+    lightPlayhead(playhead()); // lit in the sheet view, cleared elsewhere (renders the keys either way)
     requestAnimationFrame(checkScoreSize);
   }
   document.querySelectorAll("#views-nav button").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
