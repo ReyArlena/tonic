@@ -311,6 +311,22 @@
   /* Sight reading: one note on a staff (white paper, like the score) */
   .sight-staff { width: 300px; max-width: 100%; height: 250px; display: flex; flex-direction: column; justify-content: center; background: #fff; border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
   .sight-staff svg { display: block; margin: 0 auto; }
+  /* 3, 2, 1 before a round: each number pops in over the staff while a ring drains around it */
+  .sight-stage { position: relative; max-width: 100%; }
+  .sight-count { position: absolute; inset: 0; display: grid; place-items: center; background: #fff; border-radius: 12px; }
+  .sight-count[hidden] { display: none; }
+  .sight-count svg, .sight-count span { grid-area: 1 / 1; }
+  .sight-count svg { width: 150px; height: 150px; transform: rotate(-90deg); }
+  .sight-count circle { fill: none; stroke-width: 6; stroke: #eceae5; }
+  .sight-count .ring { stroke: #2f6fde; stroke-linecap: round; stroke-dasharray: 339.3; animation: count-ring 0.5s linear both; }
+  .sight-count span { font-size: 4.6rem; font-weight: 800; color: #2f6fde; line-height: 1; font-variant-numeric: tabular-nums; animation: count-pop 0.5s ease-out both; }
+  @keyframes count-ring { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 339.3; } }
+  @keyframes count-pop {
+    0% { transform: scale(1.5); opacity: 0; }
+    20% { transform: scale(1); opacity: 1; }
+    85% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(0.8); opacity: 0; }
+  }
   .sight-ref { background: #fff; border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
   .sight-ref svg { display: block; margin: 0 auto; }
   /* The reference card folds away (closed to start with): its heading is the switch */
@@ -1143,7 +1159,10 @@
           <div class="ear-stage" id="sight-run" hidden>
             <div class="ear-progress"><span id="sight-step"></span><span id="sight-running-score"></span></div>
             <div class="ear-bar"><i id="sight-bar-fill"></i></div>
-            <div class="sight-staff" id="sight-staff"></div>
+            <div class="sight-stage">
+              <div class="sight-staff" id="sight-staff"></div>
+              <div class="sight-count" id="sight-count" hidden></div>
+            </div>
             <div class="ear-prompt" id="sight-prompt"></div>
             <div class="ear-actions">
               <button class="icon-btn labelled" id="sight-quit" data-tip="Stop this round"><span class="ic" data-ic="stop"></span>Stop</button>
@@ -4260,8 +4279,30 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
     setOverlay(null);
     if (ui.sight.simple) sightSimplePiano(); else fitPiano(...sightSpan());
     sightShow("run");
+    $("sight-step").textContent = `${sight.secs}s round`;
+    $("sight-running-score").textContent = "";
+    $("sight-bar-fill").style.transition = "none";
+    $("sight-bar-fill").style.width = "100%";
+    $("sight-prompt").className = "ear-prompt";
+    $("sight-prompt").textContent = "Get ready…";
+    await sightCountdown();
+    if (!sight.running) return; // stopped during the countdown
     startRoundClock(sight, $("sight-bar-fill"), sight.secs, sightFinish);
     sightNext();
+  }
+
+  // 3, 2, 1 over the staff, half a second each; the clock starts when it's done
+  const SIGHT_COUNT_MS = 500; // keep in step with the count-pop / count-ring animations
+  function sightCountdown() {
+    const box = $("sight-count");
+    box.hidden = false;
+    return new Promise(resolve => {
+      [3, 2, 1].forEach((n, i) => sightLater(() => {
+        // Fresh nodes each count so the animations run again
+        box.innerHTML = `<svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="54"/><circle class="ring" cx="60" cy="60" r="54"/></svg><span>${n}</span>`;
+      }, i * SIGHT_COUNT_MS));
+      sightLater(() => { box.hidden = true; box.innerHTML = ""; resolve(); }, 3 * SIGHT_COUNT_MS);
+    });
   }
 
   async function sightNext() {
@@ -4365,6 +4406,7 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
     sight.awaiting = false;
     sightClearTimers();
     clearTimeout(sight.clock);
+    $("sight-count").hidden = true;
     sightShow("setup");
   }
 
