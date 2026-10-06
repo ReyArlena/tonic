@@ -2784,7 +2784,25 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       const beat = beatOf(m, pos);
       $("playhead-pos").textContent = `${mLabel(m)}/b${playing ? Math.floor(beat + 1e-6) : +beat.toFixed(2)}`;
     }
-    if (!playing) { moveCursor(pos); drawScoreMarks(); }
+    if (!playing) { moveCursor(pos); drawScoreMarks(); lightPlayhead(pos); }
+  }
+
+  // Stopped or paused: light the notes at the playhead (the first at or after it) so the keyboard shows where
+  // you are. In Wait mode they pulse like targets and only the practised hand counts, which is just what Play
+  // would wait for; otherwise every note there shows in the playing colour. Only in the sheet view: the other
+  // views use the piano for their own things.
+  function lightPlayhead(pos) {
+    if (playing) { renderKeys(); return; } // the clock lights the keys itself
+    let midis = new Set();
+    const sheet = document.querySelector(".app").classList.contains("sheet-view");
+    const hands = $("wait").checked ? practiceHands() : ["L", "R"];
+    const next = sheet ? timeline.find(n => n.onset >= pos - 1e-6 && hands.includes(n.hand)) : null;
+    if (next) midis = new Set(timeline.filter(n => Math.abs(n.onset - next.onset) < 1e-6 && hands.includes(n.hand)).map(n => n.midi));
+    const wait = $("wait").checked;
+    playingMidis = wait ? new Set() : midis;
+    heldMidis = new Set();
+    targetMidis = wait ? midis : new Set();
+    renderKeys();
   }
 
   $("xml-play").addEventListener("click", () => {
@@ -3455,6 +3473,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   ["wait", "practice-hand"].forEach(id => $(id).addEventListener("change", () => {
     updateStats();
     if (playing) { const p = position(); haltAudio(); startAt(p); }
+    else lightPlayhead(playhead()); // the lit keys follow the practised hand
   }));
 
 
@@ -3594,7 +3613,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     sightSimplePiano();
     checkPianoFit();
     saveUi();
-    renderKeys();
+    lightPlayhead(playhead()); // lit in the sheet view, cleared elsewhere (renders the keys either way)
     requestAnimationFrame(checkScoreSize);
   }
   document.querySelectorAll("#views-nav button").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
