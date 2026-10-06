@@ -427,6 +427,39 @@
   .degree.active { border-color: var(--accent); background: var(--accent-soft); }
 
   /* Root note buttons (one row of 12) */
+
+  /* ---- Drills ---- */
+  .view-drills { padding: 16px; gap: 12px; grid-template-columns: minmax(0, 680px); grid-auto-rows: max-content; justify-content: center; align-items: start; overflow: auto; }
+  @media (min-width: 1100px) { .view-drills { grid-template-columns: minmax(0, 680px) minmax(0, 360px); } }
+  .drill-card { max-width: 680px; min-width: 0; }
+  .drill-card .pane-head .tabs { flex-wrap: wrap; }
+  .drill-help { max-width: 360px; font-size: 0.9rem; color: var(--muted); }
+  .drill-help p { margin: 0 0 10px; }
+  .drill-body { display: flex; flex-direction: column; gap: 14px; }
+  .drill-body .ear-lead { text-align: left; }
+  .drill-opt { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .drill-opt[hidden] { display: none; }
+  .drill-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 20px; }
+  .tabs.seg { display: flex; }
+  .tabs.seg .tab { flex: 1; padding: 5px 8px; white-space: nowrap; min-width: 0; }
+  @media (max-width: 520px) {
+    .view-drills { padding: 10px; }
+    .drill-card .pane-head .tab { padding: 5px 9px; font-size: 0.82rem; }
+    .tabs.seg .tab { padding: 5px 4px; font-size: 0.8rem; white-space: normal; }
+  }
+  .tabs.seg .tab[hidden] { display: none; }
+  .chip-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tempo-pick { display: flex; align-items: center; gap: 10px; }
+  .tempo-pick b { min-width: 72px; text-align: center; }
+  .drill-switches { display: flex; flex-wrap: wrap; gap: 6px; }
+  .drill-switches .icon-btn.labelled { height: 32px; }
+  .drill-preview { font-size: 0.85rem; color: var(--muted); }
+  .drill-preview b { color: var(--text); }
+  .drill-bar { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
+  .drill-bar[hidden] { display: none; }
+  .ic.rot-l svg { transform: rotate(90deg); }
+  .ic.rot-r svg { transform: rotate(-90deg); }
+  .sheet-toolbar .drill-bar .labelled { height: 30px; font-size: 0.82rem; }
   .root-row { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; padding: 3px; border-radius: 11px; background: var(--bg); }
   .root-row button {
     height: 34px; border: none; border-radius: 8px; background: transparent; cursor: pointer;
@@ -696,6 +729,7 @@
       <button data-view="sheet" data-tip="Open sheet music, see its chords, play it back and practise along"><span class="ic" data-ic="music-notes"></span><span class="label">Sheet music</span></button>
       <button data-view="ear" data-tip="Ear training: hear a note, then find it on the piano"><span class="ic" data-ic="ear"></span><span class="label">Ear training</span></button>
       <button data-view="sight" data-tip="Sight reading: read a note on the staff, then find it on the piano"><span class="ic" data-ic="eye"></span><span class="label">Sight reading</span></button>
+      <button data-view="drills" data-tip="Drills: scales, arpeggios, chord progressions and finger patterns, generated as sheet music to practise along"><span class="ic" data-ic="metronome"></span><span class="label">Drills</span></button>
     </nav>
     <div class="top-actions">
       <span class="status" id="piano-status"></span>
@@ -855,6 +889,11 @@
         <div class="sheet-toolbar">
           <span class="sheet-title" id="sheet-title"></span>
           <span class="sheet-key" id="sheet-key"></span>
+          <span class="drill-bar" id="drill-bar" hidden>
+            <button class="icon-btn small" id="drill-prev" data-tip="Previous key (down a fifth)"><span class="ic rot-l" data-ic="caret-down"></span></button>
+            <button class="icon-btn small" id="drill-next" data-tip="Next key (up a fifth)"><span class="ic rot-r" data-ic="caret-down"></span></button>
+            <button class="icon-btn small labelled" id="drill-edit" data-tip="Back to the drill settings"><span class="ic" data-ic="metronome"></span>Edit drill</button>
+          </span>
           <span class="spacer"></span>
           <button id="open-file" class="icon-btn labelled" data-tip="My sheet music: open a saved sheet or add a new file"><span class="ic" data-ic="folder-open"></span>Open</button>
           <input type="file" id="xml-file" accept=".musicxml,.xml,.mxl" hidden>
@@ -1167,8 +1206,106 @@
         <div class="pane-body"><div class="sight-ref" id="sight-ref"></div></div>
       </details>
     </section>
+    <!-- Drills: generated sheet music (scales, arpeggios, progressions, patterns), opened in the sheet music view -->
+    <section class="view view-drills" id="view-drills">
+      <div class="pane ear-card drill-card">
+        <div class="pane-head">
+          <div class="tabs" id="drill-kind">
+            <button class="tab active" data-kind="scale">Scales</button>
+            <button class="tab" data-kind="arpeggio">Arpeggios</button>
+            <button class="tab" data-kind="progression">Progressions</button>
+            <button class="tab" data-kind="pattern">Patterns</button>
+          </div>
+          <span class="spacer"></span>
+        </div>
+        <div class="pane-body drill-body">
+          <p class="ear-lead" id="drill-lead"></p>
+          <select id="drill-root" hidden></select>
+          <div class="root-row" data-for="drill-root"></div>
+
+          <div class="drill-opt" id="drill-opt-type">
+            <div class="ear-label">Type</div>
+            <div class="chip-grid" id="drill-type"></div>
+          </div>
+
+          <div class="drill-opt" id="drill-opt-mode">
+            <div class="ear-label">Key</div>
+            <div class="tabs seg" id="drill-mode">
+              <button class="tab active" data-v="major">Major</button><button class="tab" data-v="minor">Minor</button>
+            </div>
+          </div>
+
+          <div class="drill-opt" id="drill-opt-inversion">
+            <div class="ear-label">Inversion</div>
+            <div class="tabs seg" id="drill-inversion">
+              <button class="tab active" data-v="0">Root</button><button class="tab" data-v="1">1st</button><button class="tab" data-v="2">2nd</button><button class="tab" data-v="3">3rd</button>
+            </div>
+          </div>
+
+          <div class="drill-row">
+            <div class="drill-opt" id="drill-opt-octaves">
+              <div class="ear-label">Octaves</div>
+              <div class="tabs seg" id="drill-octaves">
+                <button class="tab" data-v="1">1</button><button class="tab active" data-v="2">2</button><button class="tab" data-v="3">3</button><button class="tab" data-v="4">4</button>
+              </div>
+            </div>
+            <div class="drill-opt" id="drill-opt-hands">
+              <div class="ear-label">Hands</div>
+              <div class="tabs seg" id="drill-hands">
+                <button class="tab" data-v="R">Right</button><button class="tab" data-v="L">Left</button><button class="tab active" data-v="RL">Both</button><button class="tab" data-v="C">Contrary</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="drill-row">
+            <div class="drill-opt" id="drill-opt-style">
+              <div class="ear-label">Style</div>
+              <div class="tabs seg" id="drill-style">
+                <button class="tab active" data-v="block">Block</button><button class="tab" data-v="broken">Broken</button>
+              </div>
+            </div>
+            <div class="drill-opt" id="drill-opt-value">
+              <div class="ear-label">Note value</div>
+              <div class="tabs seg" id="drill-value">
+                <button class="tab" data-v="4">Quarters</button><button class="tab active" data-v="8">Eighths</button><button class="tab" data-v="16">Sixteenths</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="drill-row">
+            <div class="drill-opt">
+              <div class="ear-label">Tempo</div>
+              <div class="tempo-pick">
+                <button class="icon-btn small" id="drill-tempo-down"><span class="ic" data-ic="minus"></span></button>
+                <b id="drill-tempo-label">60 BPM</b>
+                <button class="icon-btn small" id="drill-tempo-up"><span class="ic" data-ic="plus"></span></button>
+              </div>
+            </div>
+            <div class="drill-opt">
+              <div class="ear-label">Options</div>
+              <div class="drill-switches">
+                <label class="icon-btn toggle labelled" data-tip="Finger numbers on the score (scales in every key, arpeggios on white-key roots)"><input type="checkbox" id="drill-fingering" checked><span class="ic" data-ic="hand"></span>Fingering</label>
+                <label class="icon-btn toggle labelled" data-tip="When you finish the drill in Wait mode, the next key round the circle of fifths loads"><input type="checkbox" id="drill-advance"><span class="ic" data-ic="arrow-clockwise"></span>Next key when done</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="drill-preview" id="drill-preview"></div>
+          <button class="ear-start" id="drill-start"><span class="ic" data-ic="play"></span>Open in sheet music</button>
+        </div>
+      </div>
+      <div class="pane ear-card drill-help">
+        <div class="pane-head"><h2>How drills work</h2></div>
+        <div class="pane-body">
+          <p>Each drill is written out as sheet music and opened in the Sheet music view, so everything there works: playback at any tempo, looping, hand muting and <b>Wait mode</b>, which stops at every note until you play it.</p>
+          <p>Tip: turn on Wait mode and play along on a MIDI keyboard. Wrong notes show in red, right ones in green. Use the key arrows in the sheet toolbar to move round the circle of fifths.</p>
+          <p>Fingering follows the standard tables (ABRSM/Hanon): thumb under after the 3rd or 4th finger, both hands.</p>
+        </div>
+      </div>
+    </section>
   </main>
 </div>
+
 <div class="tip" id="tip" role="tooltip"></div>
 
 <script src="tonal.min.js"></script>
@@ -2427,6 +2564,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   async function openSheet(rec) {
     try {
       await loadText(rec.text);
+      drillHide();
       currentSheetId = rec.id;
       ui.sheetId = rec.id; // reopened on the next page load
       saveUi();
@@ -2480,6 +2618,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   // Unload the current sheet and go back to the empty drop zone
   function closeSheet() {
     stopPlayback();
+    drillHide();
     currentSheetId = null;
     delete ui.sheetId;
     saveUi();
@@ -2744,7 +2883,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       holdAt = step.onset; // stop the clock until the right keys are pressed
     }
     if (range && position() >= range.to) { haltAudio(); clearTrail(); startAt(range.from); }
-    else if (!range && position() >= totalLen) stopPlayback();
+    else if (!range && position() >= totalLen) { stopPlayback(); drillFinished(); }
   }
 
   function startAt(pos) {
@@ -3033,7 +3172,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     el.hidden = false;
     $("dropzone").hidden = true;
     osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(el, {
-      backend: "svg", autoResize: false, drawTitle: true, followCursor: false,
+      backend: "svg", autoResize: false, drawTitle: true, followCursor: false, fingeringPosition: "auto",
       cursorsOptions: [{ type: 0, color: "#ee8a1f", alpha: 0.55, follow: false }],
     });
     await osmd.load(text);
@@ -3665,7 +3804,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
 
   function setView(v) {
     document.querySelectorAll("#views-nav button").forEach(b => b.classList.toggle("active", b.dataset.view === v));
-    ["theory", "sheet", "ear", "sight"].forEach(x => $("view-" + x).classList.toggle("active", v === x));
+    ["theory", "sheet", "ear", "sight", "drills"].forEach(x => $("view-" + x).classList.toggle("active", v === x));
     document.querySelector(".app").classList.toggle("sheet-view", v === "sheet");
     // One results panel, shown in whichever view is open (the test views don't use it)
     const test = v === "ear" || v === "sight";
@@ -3693,7 +3832,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   document.addEventListener("toggle", e => {
     if (e.target.matches?.("details[data-sec]")) { ui.sec[e.target.dataset.sec] = e.target.open; saveUi(); }
   }, true);
-  setView(["sheet", "ear", "sight"].includes(ui.view) ? ui.view : "theory");
+  setView(["sheet", "ear", "sight", "drills"].includes(ui.view) ? ui.view : "theory");
 
   // ---------- Ear training ----------
   // A timed round: play (optionally a reference first, then) a random note; find it on the piano.
@@ -4398,6 +4537,449 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
   $("sight-quit").addEventListener("click", sightStop);
   syncSightSettings();
 
+  // ---------- Drills: generated sheet music ----------
+  // A drill (scale, arpeggio, chord progression or finger pattern) is written out as MusicXML from its
+  // settings and opened in the sheet music view, so playback, looping, hand muting and Wait mode all work
+  // exactly as for a file. Nothing is saved to the library; the settings are remembered and the drill is
+  // rebuilt on the next page load.
+  ui.drill = Object.assign({ kind: "scale", root: 0, types: {}, inversion: 0, octaves: 2, hands: "RL", style: "block", value: 8, tempo: 60, mode: "major", fingering: true, advance: false }, ui.drill);
+  ui.drill.types = Object.assign({ scale: "major", arpeggio: "M", progression: "I-IV-V-I", pattern: "five" }, ui.drill.types);
+
+  const DRILL_SCALES = [
+    ["major", "Major"], ["minor", "Natural minor"], ["harmonic minor", "Harmonic minor"], ["melodic minor", "Melodic minor"],
+    ["dorian", "Dorian"], ["phrygian", "Phrygian"], ["lydian", "Lydian"], ["mixolydian", "Mixolydian"], ["locrian", "Locrian"],
+    ["major pentatonic", "Major pentatonic"], ["minor pentatonic", "Minor pentatonic"], ["blues", "Blues"], ["chromatic", "Chromatic"],
+  ];
+  const DRILL_CHORDS = ["M", "m", "dim", "aug", "7", "maj7", "m7", "dim7", "m7b5"];
+  const MINOR_CHORDS = new Set(["m", "dim", "m7", "dim7", "m7b5"]);
+  // degrees: 0-based scale degrees of the chord roots; mode: the scale the chords are stacked from
+  const DRILL_PROGRESSIONS = [
+    { id: "I-IV-V-I", label: "I – IV – V – I", mode: "major", degrees: [0, 3, 4, 0] },
+    { id: "I-V-vi-IV", label: "I – V – vi – IV", mode: "major", degrees: [0, 4, 5, 3] },
+    { id: "I-vi-IV-V", label: "I – vi – IV – V", mode: "major", degrees: [0, 5, 3, 4] },
+    { id: "I-vi-ii-V", label: "I – vi – ii – V", mode: "major", degrees: [0, 5, 1, 4] },
+    { id: "ii-V-I", label: "ii7 – V7 – Imaj7", mode: "major", degrees: [1, 4, 0], sevenths: true },
+    { id: "blues", label: "12-bar blues", mode: "major", degrees: [0, 0, 0, 0, 3, 3, 0, 0, 4, 3, 0, 0], dominant: true },
+    { id: "i-iv-V-i", label: "i – iv – V – i", mode: "harmonic minor", degrees: [0, 3, 4, 0] },
+    { id: "i-VI-III-VII", label: "i – VI – III – VII", mode: "minor", degrees: [0, 5, 2, 6] },
+    { id: "i-VII-VI-V", label: "i – VII – VI – V", mode: "minor", degrees: [0, 6, 5, 4], majorV: true },
+  ];
+  const DRILL_PATTERNS = [["five", "Five-finger"], ["hanon1", "Hanon no. 1"], ["thirds", "Broken thirds"]];
+  // Key signatures (sharps +, flats -) by tonic chroma. F# major and Eb minor for the six-accidental keys.
+  const KEY_FIFTHS = { major: [0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5], minor: [-3, 4, -1, -6, 1, -4, 3, -2, 5, 0, -5, 2] };
+  // Which major scale each mode borrows its key signature from: semitones below the tonic
+  const MODE_PARENT = { dorian: 2, phrygian: 4, lydian: 5, mixolydian: 7, locrian: 11 };
+  const MINOR_SCALES = ["minor", "harmonic minor", "melodic minor"];
+
+  // Standard scale fingering (ABRSM/Hanon), per tonic chroma: "ascending degrees 1-7 | later tonics | top note".
+  // The same note gets the same finger in every octave, so one pattern covers any number of octaves;
+  // descending is the exact reverse. Natural, harmonic and melodic minor share a table.
+  const SF_R = "1231234|1|5", SF_L = "5432132|1|1";
+  const SCALE_FINGERS = {
+    major: {
+      R: [SF_R, "2312341|2|2", SF_R, "3123412|3|3", SF_R, "1234123|1|4", "2341231|2|2", SF_R, "3412312|3|3", SF_R, "4123123|4|4", SF_R],
+      L: [SF_L, "3214321|3|3", SF_L, "3214321|3|3", SF_L, SF_L, "4321321|4|4", SF_L, "3214321|3|3", SF_L, "3214321|3|3", "4321432|1|1"],
+    },
+    minor: {
+      R: [SF_R, "3412312|3|3", SF_R, "3123412|3|3", SF_R, "1234123|1|4", "3412312|3|3", SF_R, "3412312|3|3", SF_R, "4123123|4|4", SF_R],
+      L: [SF_L, "3214321|3|3", SF_L, "2143213|2|2", SF_L, SF_L, "4321321|4|4", SF_L, "3214321|3|3", SF_L, "2132143|2|2", "4321432|1|1"],
+    },
+  };
+  // Root-position arpeggios on white-key roots: fingers in the first octave, in later octaves, and on the top note
+  const ARP_FINGERS = {
+    3: { R: [[1, 2, 3], [1, 2, 3], 5], L: [[5, 4, 2], [1, 4, 2], 1] },
+    4: { R: [[1, 2, 3, 4], [1, 2, 3, 4], 5], L: [[5, 4, 3, 2], [1, 4, 3, 2], 1] },
+  };
+  const WHITE_ROOTS = new Set([0, 2, 4, 5, 7, 9, 11]);
+
+  const parseNoteName = name => { const m = /^([A-G])(##?|bb?)?/.exec(name); return m ? { step: m[1], alter: m[2] ? (m[2][0] === "#" ? m[2].length : -m[2].length) : 0 } : null; };
+  // How a step is written in a key signature: F C G D A E B get sharps, B E A D G C F get flats
+  function sigAlter(step, fifths) {
+    const order = fifths >= 0 ? "FCGDAEB" : "BEADGCF";
+    return order.indexOf(step) < Math.abs(fifths) ? Math.sign(fifths) : 0;
+  }
+  // Spelling for every chroma: the scale's or chord's own notes first, then sharps or flats to match the key
+  function spellingMap(names, fifths) {
+    const map = new Map(); // chroma -> { step, alter }; .flat spells the notes outside the scale with flats instead
+    (names || []).forEach(n => { const p = parseNoteName(n); if (p) { const c = mod12(STEP_SEMIS[p.step] + p.alter); if (!map.has(c)) map.set(c, p); } });
+    const flat = new Map(map);
+    for (let c = 0; c < 12; c++) {
+      if (!map.has(c)) map.set(c, parseNoteName((fifths >= 0 ? SHARPS : FLATS)[c]));
+      if (!flat.has(c)) flat.set(c, parseNoteName(FLATS[c]));
+    }
+    map.flat = flat;
+    return map;
+  }
+  const rootNameFor = (rootC, fifths) => (fifths >= 0 ? SHARPS : FLATS)[rootC];
+
+  // ---- Note sequences. Each item: { midi } or { midis }, optional finger and dur (in 16ths; the drill's note value if left out)
+  const rev = a => [...a].reverse();
+  const upDown = asc => asc.concat(rev(asc).slice(1));
+  const downUp = asc => rev(asc).concat(asc.slice(1));
+
+  // Scale chromas from the tonic, ascending
+  function scaleChromas(rootC, type) {
+    if (type === "chromatic") return Array.from({ length: 12 }, (_, i) => mod12(rootC + i));
+    return Scale.get(SHARPS[rootC] + " " + type).notes.map(Note.chroma);
+  }
+  function scaleFifths(rootC, type) {
+    if (type === "chromatic") return 0;
+    if (MODE_PARENT[type] !== undefined) return KEY_FIFTHS.major[mod12(rootC - MODE_PARENT[type])];
+    return KEY_FIFTHS[["minor pentatonic", "blues", ...MINOR_SCALES].includes(type) ? "minor" : "major"][rootC];
+  }
+  // One hand's ascending run of a scale over N octaves from the tonic `lo`, with fingers where known
+  function scaleRun(rootC, type, lo, octaves, hand, fingering) {
+    const pcs = scaleChromas(rootC, type);
+    const table = fingering && (type === "major" ? SCALE_FINGERS.major : MINOR_SCALES.includes(type) ? SCALE_FINGERS.minor : null);
+    const f = table ? table[hand][rootC].split("|") : null;
+    const out = [];
+    for (let o = 0; o < octaves; o++) pcs.forEach((pc, d) => {
+      const item = { midi: lo + o * 12 + mod12(pc - rootC) };
+      if (f) item.finger = +(d === 0 && o > 0 ? f[1] : f[0][d]);
+      out.push(item);
+    });
+    const top = { midi: lo + octaves * 12 };
+    if (f) top.finger = +f[2];
+    out.push(top);
+    return out;
+  }
+  // Up and down (or, for the left hand in contrary motion, down and up). Melodic minor comes down as natural minor.
+  function scaleSeq(rootC, type, lo, octaves, hand, fingering, contrary) {
+    const up = scaleRun(rootC, type, lo, octaves, hand, fingering);
+    const down = rev(type === "melodic minor" ? scaleRun(rootC, "minor", lo, octaves, hand, fingering) : up);
+    if (type === "chromatic") down.forEach((it, i) => { if (i) down[i] = { ...it, flat: true }; });
+    return contrary ? down.concat(up.slice(1)) : up.concat(down.slice(1));
+  }
+  // Arpeggio from a one-octave voicing (its bass note included), up N octaves
+  function arpRun(base, octaves, hand, table) {
+    const out = [];
+    for (let o = 0; o < octaves; o++) base.forEach((m, i) => {
+      const item = { midi: m + o * 12 };
+      if (table) item.finger = table[o ? 1 : 0][i];
+      out.push(item);
+    });
+    const top = { midi: base[0] + octaves * 12 };
+    if (table) top.finger = table[2];
+    out.push(top);
+    return out;
+  }
+  // Scale degree k (any integer) as a midi note, in a 7-note scale from `lo`
+  const degreeMidi = (pcs, rootC, lo, k) => lo + Math.floor(k / 7) * 12 + mod12(pcs[((k % 7) + 7) % 7] - rootC);
+
+  function patternRun(id, rootC, mode, lo, octaves, hand, fingering) {
+    const pcs = scaleChromas(rootC, mode);
+    const at = k => degreeMidi(pcs, rootC, lo, k);
+    const withF = (ks, fs) => ks.map((k, i) => fingering && fs ? { midi: at(k), finger: fs[i] } : { midi: at(k) });
+    if (id === "five") return withF([0, 1, 2, 3, 4, 3, 2, 1, 0], hand === "R" ? [1, 2, 3, 4, 5, 4, 3, 2, 1] : [5, 4, 3, 2, 1, 2, 3, 4, 5]);
+    if (id === "hanon1") {
+      const up = hand === "R" ? [1, 2, 3, 4, 5, 4, 3, 2] : [5, 4, 3, 2, 1, 2, 3, 4], down = rev(up);
+      const out = [], span = octaves * 7;
+      for (let g = 0; g < span; g++) out.push(...withF([g, g + 2, g + 3, g + 4, g + 5, g + 4, g + 3, g + 2], up));
+      for (let g = span + 4; g >= 4; g--) out.push(...withF([g, g - 2, g - 3, g - 4, g - 5, g - 4, g - 3, g - 2], down));
+      out.push(...withF([0], [hand === "R" ? 1 : 5]));
+      return out;
+    }
+    // Broken thirds: up in pairs (C E, D F, ...) past the top tonic, then back down to end on the tonic
+    const top = octaves * 7, ks = [];
+    for (let d = 0; d < top; d++) ks.push(d, d + 2);
+    for (let d = top; d > 0; d--) ks.push(d, d - 2);
+    ks.push(0);
+    return ks.map(k => ({ midi: at(k) }));
+  }
+
+  // Chord progression: chords voiced close to middle C with the least movement between them, the root in the bass
+  function progressionRuns(prog, rootC, rootName, hands, style) {
+    const scale = mode => Scale.get(rootName + " " + mode).notes;
+    const pcs = scale(prog.mode), harm = scale("harmonic minor");
+    const names = new Set(pcs); // how every chord tone is spelled in this key
+    const chords = prog.degrees.map(d => {
+      const src = prog.majorV && d === 4 ? harm : pcs;
+      const cRoot = Note.chroma(src[d]);
+      let iv = [0, 4, 7, 10];
+      if (prog.dominant) ["1P", "3M", "5P", "7m"].forEach(i => names.add(Note.transpose(src[d], i)));
+      else {
+        const tones = [src[d], src[(d + 2) % 7], src[(d + 4) % 7]];
+        if (prog.sevenths) tones.push(src[(d + 6) % 7]);
+        tones.forEach(t => names.add(t));
+        iv = tones.map(t => mod12(Note.chroma(t) - cRoot));
+      }
+      return { rootC: cRoot, type: { iv } };
+    });
+    const R = [], L = [];
+    const avg = v => v.reduce((a, b) => a + b, 0) / v.length;
+    let prevAvg = 65;
+    const broken = tones => {
+      const cyc = tones.concat(tones.slice(1, -1).reverse());
+      return Array.from({ length: 8 }, (_, i) => ({ midi: cyc[i % cyc.length], dur: 2 }));
+    };
+    for (const ch of chords) {
+      let best = null;
+      for (let inv = 0; inv < ch.type.iv.length; inv++) {
+        const v = voicing(ch.rootC, ch.type, inv, 60);
+        if (!best || Math.abs(avg(v) - prevAvg) < Math.abs(avg(best) - prevAvg)) best = v;
+      }
+      prevAvg = avg(best);
+      const bass = 36 + ch.rootC + (36 + ch.rootC < 41 ? 12 : 0);
+      if (hands === "L") L.push(...(style === "broken" ? broken(best.map(m => m - 12)) : [{ midis: best.map(m => m - 12), dur: 16 }]));
+      else {
+        R.push(...(style === "broken" ? broken(best) : [{ midis: best, dur: 16 }]));
+        if (hands === "RL") L.push({ midi: bass, dur: 16 });
+      }
+    }
+    return { R: R.length ? R : null, L: L.length ? L : null, names: [...names], noPad: true };
+  }
+
+  // ---- The drill as it is set up now: title, key signature and the notes of each hand
+  const drillType = () => ui.drill.types[ui.drill.kind];
+  // Contrary motion only makes sense for scales and arpeggios, and spans too much of the piano past three octaves
+  const drillHands = () => ui.drill.hands === "C" && (ui.drill.kind === "progression" || ui.drill.kind === "pattern") ? "RL" : ui.drill.hands;
+  const drillOctaves = () => drillHands() === "C" ? Math.min(3, ui.drill.octaves) : ui.drill.octaves;
+  const keyName = (rootC, fifths, mode) => rootNameFor(rootC, fifths) + " " + mode;
+  function drillSpec() {
+    const d = ui.drill, rootC = +d.root, hands = drillHands(), fing = d.fingering, oct = drillOctaves();
+    const spec = { tempo: d.tempo, value: d.kind === "progression" ? 8 : d.value, R: null, L: null, names: null };
+    const contrary = hands === "C";
+    if (d.kind === "scale") {
+      const type = drillType(), fifths = scaleFifths(rootC, type);
+      spec.fifths = fifths;
+      spec.names = type === "chromatic" ? null : Scale.get(rootNameFor(rootC, fifths) + " " + type).notes;
+      spec.title = `${rootNameFor(rootC, fifths)} ${DRILL_SCALES.find(x => x[0] === type)[1].toLowerCase()} scale` + (contrary ? ", contrary motion" : "");
+      const loR = 60 + rootC, loL = contrary ? loR - 12 * oct : loR - 12;
+      if (hands !== "L") spec.R = scaleSeq(rootC, type, loR, oct, "R", fing, false);
+      if (hands !== "R") spec.L = scaleSeq(rootC, type, loL, oct, "L", fing, contrary);
+    } else if (d.kind === "arpeggio") {
+      const type = TYPE[drillType()], inv = Math.min(d.inversion, type.iv.length - 1);
+      const fifths = KEY_FIFTHS[MINOR_CHORDS.has(type.id) ? "minor" : "major"][rootC];
+      spec.fifths = fifths;
+      spec.names = Chord.get(rootNameFor(rootC, fifths) + type.suf).notes;
+      spec.title = `${rootNameFor(rootC, fifths)}${type.suf} arpeggio` + (inv ? `, ${["", "1st", "2nd", "3rd"][inv]} inversion` : "") + (contrary ? ", contrary motion" : "");
+      const base = voicing(rootC, type, inv, 60); // bass note in the middle C octave
+      const table = fing && !inv && WHITE_ROOTS.has(rootC) ? ARP_FINGERS[base.length] : null;
+      const shiftL = contrary ? 12 * oct : 12;
+      if (hands !== "L") spec.R = upDown(arpRun(base, oct, "R", table?.R));
+      if (hands !== "R") spec.L = (contrary ? downUp : upDown)(arpRun(base.map(m => m - shiftL), oct, "L", table?.L));
+    } else if (d.kind === "pattern") {
+      const id = drillType(), mode = d.mode, fifths = KEY_FIFTHS[mode][rootC], pOct = id === "five" ? 1 : oct;
+      spec.fifths = fifths;
+      spec.names = Scale.get(rootNameFor(rootC, fifths) + " " + mode).notes;
+      spec.title = `${DRILL_PATTERNS.find(x => x[0] === id)[1]} in ${keyName(rootC, fifths, mode)}`;
+      if (hands !== "L") spec.R = patternRun(id, rootC, mode, 60 + rootC, pOct, "R", fing);
+      if (hands !== "R") spec.L = patternRun(id, rootC, mode, 48 + rootC, pOct, "L", fing);
+    } else {
+      const prog = DRILL_PROGRESSIONS.find(p => p.id === drillType()) || DRILL_PROGRESSIONS[0];
+      const minor = prog.mode !== "major", fifths = KEY_FIFTHS[minor ? "minor" : "major"][rootC];
+      spec.fifths = fifths;
+      spec.title = `${prog.label} in ${keyName(rootC, fifths, minor ? "minor" : "major")}` + (d.style === "broken" ? ", broken" : "");
+      Object.assign(spec, progressionRuns(prog, rootC, rootNameFor(rootC, fifths), hands, d.style));
+    }
+    // Keep everything on the 88 keys: shift both hands by octaves if the drill runs off the top or bottom
+    const all = [...(spec.R || []), ...(spec.L || [])].flatMap(it => it.midis || [it.midi]);
+    let shift = 0;
+    while (Math.max(...all) + shift > 108) shift -= 12;
+    while (Math.min(...all) + shift < 21) shift += 12;
+    if (shift) for (const h of ["R", "L"]) spec[h]?.forEach(it => { if (it.midis) it.midis = it.midis.map(m => m + shift); else it.midi += shift; });
+    return spec;
+  }
+
+  // ---- MusicXML writer. Durations in 16ths, 4/4 time; long notes are split at bar lines and tied.
+  const DUR_TYPES = { 16: ["whole", 0], 12: ["half", 1], 8: ["half", 0], 6: ["quarter", 1], 4: ["quarter", 0], 3: ["eighth", 1], 2: ["eighth", 0], 1: ["16th", 0] };
+  const DUR_STEPS = [16, 12, 8, 6, 4, 3, 2, 1];
+  const ACC = { 2: "double-sharp", 1: "sharp", 0: "natural", "-1": "flat", "-2": "flat-flat" };
+  // Place a hand's items in time; the last note is held at least to the end of its bar (and a beat at the least)
+  function layoutHand(items, value, noPad) {
+    let pos = 0;
+    const out = items.map(it => { const o = { ...it, pos, dur: it.dur || 16 / value }; pos += o.dur; return o; });
+    const last = out[out.length - 1];
+    let rem = 16 - last.pos % 16;
+    if (rem < 4 && !noPad) rem += 16;
+    last.dur = Math.max(last.dur, rem);
+    return out;
+  }
+  const drillBars = spec => Math.max(...["R", "L"].filter(h => spec[h]).map(h => { const l = layoutHand(spec[h], spec.value, spec.noPad); const last = l[l.length - 1]; return Math.ceil((last.pos + last.dur) / 16); }));
+  function drillXml(spec) {
+    const spell = spellingMap(spec.names, spec.fifths);
+    const hands = ["R", "L"].filter(h => spec[h]);
+    const bars = drillBars(spec);
+    // Pieces: items cut at bar lines and into standard note values, tied together
+    const pieces = {};
+    for (const h of hands) {
+      const laid = layoutHand(spec[h], spec.value, spec.noPad), last = laid[laid.length - 1];
+      last.dur = bars * 16 - last.pos; // every hand ends on the same final bar line
+      pieces[h] = [];
+      for (const it of laid) {
+        let pos = it.pos, left = it.dur;
+        const parts = [];
+        while (left > 0) {
+          const room = Math.min(left, 16 - pos % 16);
+          const d = DUR_STEPS.find(x => x <= room);
+          parts.push({ pos, dur: d });
+          pos += d;
+          left -= d;
+        }
+        parts.forEach((p, i) => pieces[h].push({ ...p, midis: it.midis || [it.midi], flat: it.flat, finger: i === 0 ? it.finger : undefined, tieStart: i < parts.length - 1, tieStop: i > 0 }));
+      }
+    }
+    const pitchXml = (midi, flat) => {
+      const sp = (flat ? spell.flat : spell).get(mod12(midi)), oct = Math.floor((midi - sp.alter) / 12) - 1;
+      const acc = sp.alter !== sigAlter(sp.step, spec.fifths) ? `<accidental>${ACC[sp.alter]}</accidental>` : "";
+      return [`<pitch><step>${sp.step}</step>${sp.alter ? `<alter>${sp.alter}</alter>` : ""}<octave>${oct}</octave></pitch>`, acc];
+    };
+    const noteXml = (p, midi, k, staff, voice, beams) => {
+      const [type, dots] = DUR_TYPES[p.dur];
+      const [pitch, acc] = pitchXml(midi, p.flat);
+      const notations = [];
+      if (p.tieStart) notations.push('<tied type="start"/>');
+      if (p.tieStop) notations.push('<tied type="stop"/>');
+      if (k === 0 && p.finger) notations.push(`<technical><fingering>${p.finger}</fingering></technical>`);
+      return `<note>${k ? "<chord/>" : ""}${pitch}<duration>${p.dur}</duration>${p.tieStop ? '<tie type="stop"/>' : ""}${p.tieStart ? '<tie type="start"/>' : ""}<voice>${voice}</voice><type>${type}</type>${"<dot/>".repeat(dots)}${acc}${staff ? `<staff>${staff}</staff>` : ""}${k === 0 ? beams : ""}${notations.length ? `<notations>${notations.join("")}</notations>` : ""}</note>`;
+    };
+    // Beams: runs of equal eighths or sixteenths inside one beat
+    const beamsFor = list => list.map((p, i) => {
+      if (p.dur > 2) return "";
+      const same = q => q && q.dur === p.dur && Math.floor(q.pos / 4) === Math.floor(p.pos / 4);
+      const prev = same(list[i - 1]), next = same(list[i + 1]);
+      if (!prev && !next) return "";
+      const state = !prev ? "begin" : !next ? "end" : "continue";
+      return Array.from({ length: p.dur === 1 ? 2 : 1 }, (_, n) => `<beam number="${n + 1}">${state}</beam>`).join("");
+    });
+    const two = hands.length === 2;
+    const clef = h => h === "R" ? "<sign>G</sign><line>2</line>" : "<sign>F</sign><line>4</line>";
+    let measures = "";
+    for (let b = 0; b < bars; b++) {
+      let body = "";
+      if (b === 0) {
+        body += `<attributes><divisions>4</divisions><key><fifths>${spec.fifths}</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time>` +
+          (two ? `<staves>2</staves><clef number="1">${clef("R")}</clef><clef number="2">${clef("L")}</clef>` : `<clef>${clef(hands[0])}</clef>`) + "</attributes>";
+        body += `<direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>${spec.tempo}</per-minute></metronome></direction-type><sound tempo="${spec.tempo}"/></direction>`;
+      }
+      hands.forEach((h, hi) => {
+        const list = pieces[h].filter(p => Math.floor(p.pos / 16) === b), beams = beamsFor(list);
+        if (hi) body += `<backup><duration>16</duration></backup>`;
+        if (!list.length) body += `<note><rest/><duration>16</duration><voice>${hi + 1}</voice><type>whole</type>${two ? `<staff>${hi + 1}</staff>` : ""}</note>`;
+        list.forEach((p, i) => p.midis.forEach((m, k) => { body += noteXml(p, m, k, two ? hi + 1 : 0, hi + 1, beams[i]); }));
+      });
+      measures += `<measure number="${b + 1}">${body}</measure>`;
+    }
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1"><work><work-title>${esc(spec.title)}</work-title></work>
+<part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+<part id="P1">${measures}</part></score-partwise>`;
+  }
+
+  // ---- Drill settings card
+  const DRILL_OPTS = { // the option rows each kind of drill shows
+    scale: ["type", "octaves", "hands", "value"],
+    arpeggio: ["type", "inversion", "octaves", "hands", "value"],
+    progression: ["type", "hands", "style"],
+    pattern: ["type", "mode", "octaves", "hands", "value"],
+  };
+  const DRILL_LEADS = {
+    scale: "Up and down, in any key. Standard fingering is written on the score for major and minor scales.",
+    arpeggio: "Broken chords up and down. Fingering is shown for root position on white-key roots.",
+    progression: "Common chord progressions, one chord a bar: block chords, or broken as eighth notes.",
+    pattern: "Finger exercises in the key of your choice, both hands an octave apart.",
+  };
+  function renderDrillUi() {
+    const d = ui.drill, kind = d.kind;
+    const types = kind === "scale" ? DRILL_SCALES : kind === "arpeggio" ? DRILL_CHORDS.map(id => [id, TYPE[id].name]) : kind === "pattern" ? DRILL_PATTERNS : DRILL_PROGRESSIONS.map(p => [p.id, p.label]);
+    if (!types.some(t => t[0] === d.types[kind])) d.types[kind] = types[0][0];
+    document.querySelectorAll("#drill-kind .tab").forEach(t => t.classList.toggle("active", t.dataset.kind === kind));
+    $("drill-lead").textContent = DRILL_LEADS[kind];
+    $("drill-type").innerHTML = types.map(([id, label]) => `<button class="chip${id === d.types[kind] ? " active" : ""}" data-type="${esc(id)}">${esc(label)}</button>`).join("");
+    const show = DRILL_OPTS[kind];
+    ["type", "inversion", "octaves", "hands", "style", "value", "mode"].forEach(o => { $("drill-opt-" + o).hidden = !show.includes(o) || (o === "octaves" && kind === "pattern" && d.types.pattern === "five"); });
+    const seg = (id, v) => document.querySelectorAll(`#${id} .tab`).forEach(t => t.classList.toggle("active", t.dataset.v === String(v)));
+    const four = kind === "arpeggio" && TYPE[d.types.arpeggio].iv.length > 3;
+    document.querySelector('#drill-inversion [data-v="3"]').hidden = !four;
+    if (!four && d.inversion > 2) d.inversion = 2;
+    document.querySelector('#drill-hands [data-v="C"]').hidden = kind === "progression" || kind === "pattern";
+    document.querySelector('#drill-octaves [data-v="4"]').hidden = drillHands() === "C";
+    seg("drill-inversion", d.inversion);
+    seg("drill-octaves", drillOctaves());
+    seg("drill-hands", drillHands());
+    seg("drill-style", d.style);
+    seg("drill-value", d.value);
+    seg("drill-mode", d.mode);
+    $("drill-tempo-label").textContent = d.tempo + " BPM";
+    $("drill-fingering").checked = d.fingering;
+    $("drill-advance").checked = d.advance;
+    $("drill-root").value = String(d.root);
+    renderRootRows();
+    try {
+      const spec = drillSpec(), count = (spec.R || spec.L).length, bars = drillBars(spec);
+      $("drill-preview").innerHTML = `<b>${esc(spec.title)}</b> · ${bars} bar${bars === 1 ? "" : "s"} · ${count} note${count === 1 ? "" : "s"} a hand`;
+    } catch (e) { $("drill-preview").textContent = ""; }
+    saveUi();
+  }
+  for (let i = 0; i < 12; i++) $("drill-root").appendChild(new Option(ROOT_LABELS[i], i));
+  $("drill-root").addEventListener("change", () => { ui.drill.root = +$("drill-root").value; renderDrillUi(); });
+  document.querySelectorAll("#drill-kind .tab").forEach(t => t.addEventListener("click", () => { ui.drill.kind = t.dataset.kind; renderDrillUi(); }));
+  $("drill-type").addEventListener("click", e => {
+    const b = e.target.closest("[data-type]");
+    if (!b) return;
+    ui.drill.types[ui.drill.kind] = b.dataset.type;
+    renderDrillUi();
+  });
+  [["drill-inversion", "inversion", Number], ["drill-octaves", "octaves", Number], ["drill-hands", "hands", String], ["drill-style", "style", String], ["drill-value", "value", Number], ["drill-mode", "mode", String]]
+    .forEach(([id, field, cast]) => $(id).addEventListener("click", e => {
+      const t = e.target.closest(".tab");
+      if (!t) return;
+      ui.drill[field] = cast(t.dataset.v);
+      renderDrillUi();
+    }));
+  const drillTempo = delta => { ui.drill.tempo = Math.max(30, Math.min(240, ui.drill.tempo + delta)); renderDrillUi(); };
+  $("drill-tempo-down").addEventListener("click", () => drillTempo(-5));
+  $("drill-tempo-up").addEventListener("click", () => drillTempo(5));
+  $("drill-fingering").addEventListener("change", () => { ui.drill.fingering = $("drill-fingering").checked; renderDrillUi(); });
+  $("drill-advance").addEventListener("change", () => { ui.drill.advance = $("drill-advance").checked; renderDrillUi(); });
+
+  // ---- Opening a drill in the sheet music view, and moving round the circle of fifths
+  let drillAdvanceTimer = null;
+  async function openDrill(show = true) {
+    const spec = drillSpec();
+    if (show) setView("sheet");
+    await loadText(drillXml(spec));
+    currentSheetId = null;
+    delete ui.sheetId;
+    ui.drillOpen = true;
+    saveUi();
+    $("sheet-title").textContent = spec.title;
+    $("drill-bar").hidden = false;
+    closeLibrary();
+  }
+  // A file took the drill's place, or the sheet was closed
+  function drillHide() {
+    clearTimeout(drillAdvanceTimer);
+    if (!ui.drillOpen) return;
+    ui.drillOpen = false;
+    saveUi();
+    $("drill-bar").hidden = true;
+  }
+  // Next or previous key round the circle of fifths (C, G, D, ... up; C, F, Bb, ... down)
+  async function drillStep(dir) {
+    ui.drill.root = mod12(ui.drill.root + 7 * dir);
+    renderDrillUi();
+    await openDrill(false);
+  }
+  // Playback ran off the end of the piece: with "Next key when done" on, the next key loads and starts
+  function drillFinished() {
+    clearTimeout(drillAdvanceTimer);
+    if (!ui.drillOpen || !ui.drill.advance) return;
+    drillAdvanceTimer = setTimeout(async () => {
+      if (!ui.drillOpen || playing) return;
+      await drillStep(1);
+      selected.clear();
+      render();
+      resetStats();
+      startPlayback(0);
+    }, 900);
+  }
+  $("drill-start").addEventListener("click", () => openDrill().catch(err => { $("drill-preview").textContent = "Could not build this drill: " + err.message; }));
+  $("drill-prev").addEventListener("click", () => drillStep(-1));
+  $("drill-next").addEventListener("click", () => drillStep(1));
+  $("drill-edit").addEventListener("click", () => setView("drills"));
+  renderDrillUi();
+
   // ---------- MIDI input ----------
   // Reset from the keyboard: the lowest and highest key held together act as the Reset button.
   // The keys are learned ("Set keys"), since a MIDI keyboard doesn't report its size; 88 keys by default.
@@ -4510,6 +5092,7 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
     if (rec) openSheet(rec);
     else { delete ui.sheetId; saveUi(); }
   }).catch(() => {});
+  else if (ui.drillOpen) openDrill(false).catch(() => {});
 
   // ---------- Controls ----------
   $("clear").addEventListener("click", () => { selected.clear(); render(); });
