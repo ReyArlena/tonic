@@ -764,7 +764,7 @@
     </nav>
     <div class="top-actions">
       <span class="status" id="piano-status"></span>
-      <button id="midi" class="icon-btn" data-tip="Connect a MIDI keyboard (Chrome or Edge)">
+      <button id="midi" class="icon-btn" data-tip="Connect a MIDI keyboard">
         <span class="ic" data-ic="plugs"></span><span class="midi-dot" id="midi-dot"></span>
       </button>
       <div class="pop down right click">
@@ -5249,7 +5249,7 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
   function setMidiStatus(text, connected) {
     $("midi-status").textContent = text;
     $("midi-dot").classList.toggle("on", connected);
-    $("midi").dataset.tip = connected ? text : text + " Click to connect a MIDI keyboard (Chrome or Edge).";
+    $("midi").dataset.tip = connected ? text : text + " Click to connect a MIDI keyboard.";
   }
   function attachInputs(access) {
     // Chrome keeps unplugged ports in the list as "disconnected": only live ones count.
@@ -5262,7 +5262,10 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
   }
   async function connectMidi() {
     if (!navigator.requestMIDIAccess) {
-      setMidiStatus("This browser has no Web MIDI support (use Chrome or Edge).", false);
+      // Firefox has Web MIDI, but only on http(s) pages: opened from disk, the API isn't there at all
+      setMidiStatus(location.protocol === "file:"
+        ? "Web MIDI needs the app served over http(s): open it from a local server (e.g. http://localhost), or use Chrome or Edge."
+        : "This browser has no Web MIDI support (use Chrome, Edge or Firefox).", false);
       return;
     }
     try {
