@@ -308,11 +308,15 @@
   .ear-score small { font-size: 1rem; font-weight: 600; letter-spacing: 0; color: var(--muted); margin-left: 6px; }
   .ear-score-sub { color: var(--muted); margin-top: -6px; }
 
-  /* Sight reading: one note on a staff (white paper, like the score) */
-  .sight-staff { width: 300px; max-width: 100%; height: 250px; display: flex; flex-direction: column; justify-content: center; background: #fff; border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
-  .sight-staff svg { display: block; margin: 0 auto; }
+  /* Sight reading: an endless line of notes (white paper, like the score) scrolling past a fixed play line.
+     Two engraved lines take turns: the one being read shows, the next is drawn in the wings */
+  .sight-stage { position: relative; width: 100%; }
+  .sight-scroll { position: relative; width: 100%; height: 160px; overflow: hidden; background: #fff; border-radius: 12px; border: 1px solid var(--border); }
+  .sight-line { position: absolute; left: 0; top: 0; visibility: hidden; transition: transform 0.2s ease-out; will-change: transform; }
+  .sight-line.show { visibility: visible; }
+  .sight-line svg { display: block; }
+  .sight-cursor { position: absolute; top: 6px; bottom: 6px; left: calc(28% - 1px); width: 2px; border-radius: 2px; background: var(--accent); opacity: 0.55; pointer-events: none; }
   /* 3, 2, 1 before a round: each number pops in over the staff while a ring drains around it */
-  .sight-stage { position: relative; max-width: 100%; }
   .sight-count { position: absolute; inset: 0; display: grid; place-items: center; background: #fff; border-radius: 12px; }
   .sight-count[hidden] { display: none; }
   .sight-count svg, .sight-count span { grid-area: 1 / 1; }
@@ -335,9 +339,8 @@
   summary.pane-head .ic { width: 14px; height: 14px; transition: transform 0.15s; transform: rotate(-90deg); }
   details[open] > summary.pane-head .ic { transform: none; }
   details:not([open]) > summary.pane-head { border-bottom: none; border-radius: 13px; }
-  /* The note you got right turns green; a wrong key shows as a red note beside it */
-  .sight-staff.good .vf-stavenote:not(.wrong) path { fill: #2e9e6a; stroke: #2e9e6a; }
-  .sight-staff .vf-stavenote.wrong path { fill: #d64545; stroke: #d64545; }
+  /* A note you got right turns green; a wrong key shows as a red note beside it (a .miss-note, as on the score) */
+  .sight-line .vf-stavenote.good path { fill: #2e9e6a; stroke: #2e9e6a; }
   /* A wrong key too far outside the clef to draw flashes a red arrow at the staff's top or bottom edge
      instead, like the piano's off-screen arrows */
   .sight-arrow {
@@ -1211,7 +1214,11 @@
             <div class="ear-progress"><span id="sight-step"></span><span id="sight-running-score"></span></div>
             <div class="ear-bar"><i id="sight-bar-fill"></i></div>
             <div class="sight-stage">
-              <div class="sight-staff" id="sight-staff"></div>
+              <div class="sight-scroll" id="sight-scroll">
+                <div class="sight-line" id="sight-line-a"></div>
+                <div class="sight-line" id="sight-line-b"></div>
+                <i class="sight-cursor"></i>
+              </div>
               <div class="sight-arrow up" id="sight-arrow-up"><span class="ic" data-ic="caret-down"></span></div>
               <div class="sight-arrow down" id="sight-arrow-down"><span class="ic" data-ic="caret-down"></span></div>
               <div class="sight-count" id="sight-count" hidden></div>
@@ -4228,9 +4235,9 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
   syncEarSettings();
 
   // ---------- Sight reading ----------
-  // A timed round: show a random note on a treble or bass staff; find it on the piano.
-  // The exact key is needed (reading the octave is part of it). Wrong keys go red, then try again.
-  // Score: notes right on the first try, per minute.
+  // A timed round: random notes on a treble or bass staff scroll past a play line; find each on the piano
+  // and the next comes along. The exact key is needed (reading the octave is part of it). Wrong keys go red,
+  // then try again. Score: notes right on the first try, per minute.
   // var (not const): setView can run sightStop() before this line during start-up
   var sight = { running: false, idx: 0, answered: 0, correct: 0, target: null, awaiting: false, timers: [] };
   const sightActive = () => sight.running && $("view-sight").classList.contains("active");
@@ -4313,9 +4320,10 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
 
   // A random clef, then a random key in its range. Black keys are written as a sharp or a flat.
   // With "Test worst notes" on, most picks come from the weak notes instead, the weakest most often.
-  function sightPick() {
+  // prev: the note before this one, never asked twice in a row
+  function sightPick(prev) {
     if (ui.sight.worst && Math.random() < SIGHT_WEAK_SHARE) {
-      const all = sightWeakPool(), pool = all.filter(n => !sight.target || n.midi !== sight.target.midi);
+      const all = sightWeakPool(), pool = all.filter(n => !prev || n.midi !== prev.midi);
       if (all.length >= SIGHT_WEAK_MIN && pool.length) {
         let r = Math.random() * pool.reduce((a, n) => a + n.score, 0);
         const { score, ...pick } = pool.find(n => (r -= n.score) < 0) || pool[pool.length - 1];
@@ -4329,7 +4337,7 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
       const midi = lo + Math.floor(Math.random() * (hi - lo + 1));
       const black = BLACK.has(midi % 12);
       if (black && !ui.sight.accidentals) continue;
-      if (sight.target && midi === sight.target.midi) continue; // never the same note twice in a row
+      if (prev && midi === prev.midi) continue;
       const n = sightSpell(midi, Math.random() < 0.5);
       return { clef, midi, ...n, name: sightNoteName(n) };
     }
@@ -4341,45 +4349,142 @@ ${chord(treble, 1)}<backup><duration>4</duration></backup>${chord(bass, 2)}
     return { step: NATURALS[natural % 12], alter, octave: octaveOf(natural) };
   }
 
-  // One bar holding the question note (and, after a wrong key, the note that was played),
-  // drawn with the same engraver as the sheet music
-  function sightXml(n, wrong) {
-    // Practice mode: the question note's letter above the staff (the octave is still read from the staff)
-    const letter = ui.sight.letters ? `<direction placement="above"><direction-type><words font-size="14" font-weight="bold">${n.name.replace(/-?\d+$/, "")}</words></direction-type></direction>` : "";
-    const clef = n.clef === "treble" ? "<sign>G</sign><line>2</line>" : "<sign>F</sign><line>4</line>";
-    const note = n => `<note><pitch><step>${n.step}</step>${n.alter ? `<alter>${n.alter}</alter>` : ""}<octave>${n.octave}</octave></pitch><duration>1</duration><type>quarter</type>${
-      n.alter ? `<accidental>${n.alter > 0 ? "sharp" : "flat"}</accidental>` : ""}</note>`;
+  // ---- The staff: an endless run of quarter notes scrolling past a fixed play line, read like a score in
+  // Wait mode. It's engraved a line at a time, SIGHT_LINE notes to a line, 4 to a bar, with the same engraver
+  // as the sheet music. Two engraved lines take turns: while one is being read the next is drawn hidden, and it
+  // takes over the moment the last note is answered. Both clefs on: a grand staff, each note on its clef's staff.
+  const SIGHT_LINE = 32;
+  const SIGHT_ZOOM = 1.3;
+  const SIGHT_PLAY_X = 0.28;          // the play line, as a share of the box width from its left edge (see .sight-cursor)
+  const SIGHT_H = { 1: 160, 2: 260 }; // box height by number of staves (see sightBoxH)
+  const sightLines = ["sight-line-a", "sight-line-b"].map(id => ({ el: $(id), osmd: null, notes: [], heads: [], xs: [], staves: [], o: null }));
+  const sightGrand = () => ui.sight.clef === "both";
+  const sightBoxH = () => SIGHT_H[sightGrand() ? 2 : 1] + (ui.sight.letters ? 28 : 0); // room for the letters above the top notes
+
+  function sightLineXml(notes) {
+    const grand = sightGrand();
+    const ACC = { 1: "sharp", "-1": "flat" };
+    const staffOf = n => grand && n.clef === "bass" ? 2 : 1;
+    const note = (n, staff) => {
+      // Practice mode: the note's letter above the staff (the octave is still read from the staff)
+      const on = grand ? `<staff>${staff}</staff>` : "";
+      const letter = ui.sight.letters ? `<direction placement="above"><direction-type><words font-size="12" font-weight="bold">${n.name.replace(/-?\d+$/, "")}</words></direction-type>${on}</direction>` : "";
+      return `${letter}<note><pitch><step>${n.step}</step>${n.alter ? `<alter>${n.alter}</alter>` : ""}<octave>${n.octave}</octave></pitch><duration>1</duration><voice>${staff}</voice><type>quarter</type>${
+        ACC[n.alter] ? `<accidental>${ACC[n.alter]}</accidental>` : ""}${on}</note>`;
+    };
+    const rest = staff => `<note print-object="no"><rest/><duration>1</duration><voice>${staff}</voice><type>quarter</type><staff>${staff}</staff></note>`;
+    const clefs = grand ? `<staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef>`
+      : `<clef>${ui.sight.clef === "bass" ? "<sign>F</sign><line>4</line>" : "<sign>G</sign><line>2</line>"}</clef>`;
+    let measures = "";
+    for (let i = 0; i < notes.length; i += 4) {
+      const bar = notes.slice(i, i + 4);
+      const attrs = i ? "" : `<attributes><divisions>1</divisions><key><fifths>0</fifths></key><time print-object="no"><beats>4</beats><beat-type>4</beat-type></time>${clefs}</attributes>`;
+      // A grand staff needs both staves filled: a note on the other staff is a hidden rest on this one
+      const body = grand
+        ? bar.map(n => staffOf(n) === 1 ? note(n, 1) : rest(1)).join("") + `<backup><duration>${bar.length}</duration></backup>` + bar.map(n => staffOf(n) === 2 ? note(n, 2) : rest(2)).join("")
+        : bar.map(n => note(n, 1)).join("");
+      measures += `<measure number="${i / 4 + 1}">${attrs}${body}</measure>`;
+    }
     return `<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="3.1"><part-list><score-part id="P1"><part-name></part-name></score-part></part-list>
-<part id="P1"><measure number="1">
-<attributes><divisions>1</divisions><key><fifths>0</fifths></key><time print-object="no"><beats>${wrong ? 2 : 1}</beats><beat-type>4</beat-type></time><clef>${clef}</clef></attributes>
-${letter}${note(n)}${wrong ? note(wrong) : ""}
-</measure></part></score-partwise>`;
+<part id="P1">${measures}</part></score-partwise>`;
   }
 
-  // Draws are queued: a redraw for a wrong key must not overlap the next question's draw.
-  // wrong: the wrongly played note, shown in red.
-  let sightOsmd = null, sightDrawing = Promise.resolve();
-  function sightDraw(n, wrong = null) {
-    return sightDrawing = sightDrawing.catch(() => {}).then(() => sightRender(n, wrong));
+  // Engraves run one at a time: a line must never be redrawn while another draw is under way
+  let sightDrawing = Promise.resolve();
+  function sightEngrave(line, notes) {
+    return sightDrawing = sightDrawing.catch(() => {}).then(() => sightRenderLine(line, notes));
   }
-  async function sightRender(n, wrong) {
-    if (!window.opensheetmusicdisplay) return;
-    if (!sightOsmd) {
-      sightOsmd = new opensheetmusicdisplay.OpenSheetMusicDisplay($("sight-staff"), {
-        backend: "svg", autoResize: false, drawTitle: false, drawSubtitle: false, drawComposer: false, drawLyricist: false,
-        drawCredits: false, drawPartNames: false, drawMeasureNumbers: false, drawMetronomeMarks: false, drawTimeSignatures: false,
-      });
+  async function sightRenderLine(line, notes) {
+    if (!window.opensheetmusicdisplay) throw new Error("no engraver");
+    const el = line.el;
+    el.querySelectorAll(".miss-note").forEach(x => x.remove());
+    line.osmd ||= new opensheetmusicdisplay.OpenSheetMusicDisplay(el, {
+      backend: "svg", autoResize: false, renderSingleHorizontalStaffline: true, drawTitle: false, drawSubtitle: false, drawComposer: false,
+      drawLyricist: false, drawCredits: false, drawPartNames: false, drawMeasureNumbers: false, drawMetronomeMarks: false, drawTimeSignatures: false,
+    });
+    await line.osmd.load(sightLineXml(notes));
+    line.osmd.zoom = SIGHT_ZOOM;
+    // Bars all the same width, so the notes come past at an even pace
+    Object.assign(line.osmd.EngravingRules, { FixedMeasureWidth: true, FixedMeasureWidthFixedValue: 14, PageLeftMargin: 1, PageRightMargin: 1, PageTopMargin: 0, PageBottomMargin: 0, BetweenStaffDistance: 5, StaffDistance: 5 });
+    line.osmd.render();
+    const u = 10 * SIGHT_ZOOM, svg = el.querySelector("svg");
+    const sr = svg.getBoundingClientRect(), er = el.getBoundingClientRect();
+    const o = { ox: sr.left - er.left, oy: sr.top - er.top, u };
+    const scale = svg.viewBox.baseVal?.width ? sr.width / svg.viewBox.baseVal.width : 1; // bbox units to px
+    // Each note's notehead centre (px in the line) and its drawn group, in order, skipping the hidden rests
+    const heads = [], xs = [], staves = [];
+    for (const measure of line.osmd.GraphicSheet.MeasureList) {
+      const entries = [];
+      for (const gm of measure) {
+        for (const se of gm?.staffEntries || []) {
+          for (const ve of se.graphicalVoiceEntries) {
+            for (const gn of ve.notes) {
+              if (gn.sourceNote.isRest()) continue;
+              const g = gn.getSVGGElement(), head = g?.querySelector(".vf-notehead");
+              const b = head ? head.getBBox() : null;
+              entries.push({ t: se.relInMeasureTimestamp.RealValue, g, x: o.ox + (b ? (b.x + b.width / 2) * scale : se.PositionAndShape.AbsolutePosition.x * u) });
+            }
+          }
+        }
+      }
+      // staves: the bar's staff measures, so a wrong note can be drawn on either staff of a grand staff
+      entries.sort((a, b) => a.t - b.t).forEach(e => { heads.push(e.g); xs.push(e.x); staves.push(measure.filter(Boolean)); });
     }
-    await sightOsmd.load(sightXml(n, wrong));
-    sightOsmd.zoom = 2;
-    // The one bar fills the box instead of hugging the note
-    Object.assign(sightOsmd.EngravingRules, { StretchLastSystemLine: true, PageLeftMargin: 1.5, PageRightMargin: 1.5 });
-    sightOsmd.render();
-    const staff = $("sight-staff");
-    if (wrong) staff.querySelectorAll(".vf-stavenote")[1]?.classList.add("wrong");
-    // Already answered while this was waiting to draw: keep the question note green
-    staff.className = "sight-staff" + (sight.solved === n ? " good" : "");
+    // Centre the staff (or the pair) in the box, whatever ledger lines and letters stick out
+    const first = line.osmd.GraphicSheet.MeasureList[0].filter(Boolean);
+    const y1 = o.oy + first[0].PositionAndShape.AbsolutePosition.y * u, y2 = o.oy + first[first.length - 1].PositionAndShape.AbsolutePosition.y * u + 4 * u;
+    el.style.top = ((sightBoxH() - (y2 - y1)) / 2 - y1 + (ui.sight.letters ? 10 : 0)).toFixed(1) + "px";
+    Object.assign(line, { notes, heads, xs, staves, o });
+  }
+
+  // Slide the line so the current note sits on the play line
+  function sightScroll(animate = true) {
+    const line = sight.line;
+    if (!line) return;
+    const w = $("sight-scroll").clientWidth, x = line.xs[sight.pos] ?? 0;
+    const el = line.el;
+    if (!animate) el.style.transition = "none";
+    el.style.transform = `translateX(${(SIGHT_PLAY_X * w - x).toFixed(1)}px)`;
+    if (!animate) { void el.offsetWidth; el.style.transition = ""; }
+  }
+  new ResizeObserver(() => sightScroll(false)).observe($("sight-scroll"));
+
+  // A wrong key drawn in red just right of the question note, as on the score in Wait mode: { step, alter, octave },
+  // on the staff with the given clef
+  function sightGhost(i, n, clef) {
+    const line = sight.line, o = line.o;
+    const gm = (line.staves[i] || []).find(g => (g.InitiallyActiveClef?.ClefType === 1) === (clef === "bass")) || line.staves[i]?.[0];
+    if (!gm || !o) return;
+    const u = o.u;
+    line.el.querySelector(`.miss-note[data-i="${i}"]`)?.remove();
+    const top = STAFF_TOP[gm.InitiallyActiveClef?.ClefType] ?? STAFF_TOP[0];
+    const d = n.octave * 7 + "CDEFGAB".indexOf(n.step);
+    const el = document.createElement("div");
+    el.className = "miss-note";
+    el.dataset.i = i;
+    Object.assign(el.style, { left: line.xs[i] + 1.7 * u + "px", top: o.oy + (gm.PositionAndShape.AbsolutePosition.y + (top - d) / 2) * u + "px" });
+    let html = `<i class="head" style="left:${-0.62 * u}px;top:${-0.45 * u}px;width:${1.24 * u}px;height:${0.9 * u}px"></i>`;
+    const ledger = k => { html += `<i style="left:${-u}px;top:${(d - k) / 2 * u - 0.06 * u}px;width:${2 * u}px;height:${Math.max(1, 0.12 * u)}px"></i>`; };
+    for (let k = top + 2; k <= d; k += 2) ledger(k);
+    for (let k = top - 10; k >= d; k -= 2) ledger(k);
+    if (n.alter) html += `<b style="left:${-0.8 * u}px;top:0;font-size:${2 * u}px">${n.alter > 0 ? "♯" : "♭"}</b>`;
+    el.innerHTML = html;
+    line.el.appendChild(el);
+  }
+
+  // The notes of one line, none the same as the one before it
+  function sightLineNotes(prev) {
+    const notes = [];
+    for (let i = 0; i < SIGHT_LINE; i++) notes.push(prev = sightPick(prev));
+    return notes;
+  }
+  // Draw the line after the current one, ready to take over
+  function sightPrepareNext() {
+    const round = sight.round, other = sightLines.find(l => l !== sight.line);
+    sight.next = null;
+    sight.preparing = sightEngrave(other, sightLineNotes(sight.line.notes[sight.line.notes.length - 1]))
+      .then(() => { if (sight.round === round) sight.next = other; }).catch(() => {});
   }
 
   // ---- Reference: both clefs with the names of the notes on the lines, then in the spaces
@@ -4428,7 +4533,8 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
   async function sightStart() {
     await sightLoadWeak();
     sightClearTimers();
-    Object.assign(sight, { running: true, secs: ui.sight.secs, idx: 0, answered: 0, correct: 0, target: null, awaiting: false, questions: [] });
+    Object.assign(sight, { running: true, round: (sight.round || 0) + 1, secs: ui.sight.secs, idx: 0, answered: 0, correct: 0, target: null, awaiting: false, questions: [], line: null, next: null, pos: 0 });
+    const round = sight.round;
     // No hints on the piano while testing
     selected.clear();
     setOverlay(null);
@@ -4440,10 +4546,19 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
     $("sight-bar-fill").style.width = "100%";
     $("sight-prompt").className = "ear-prompt";
     $("sight-prompt").textContent = "Get ready…";
+    $("sight-scroll").style.height = sightBoxH() + "px";
+    sightLines.forEach(l => l.el.classList.remove("show"));
+    // The first line is engraved behind the countdown
+    const first = sightLines[0], ready = sightEngrave(first, sightLineNotes(null)).then(() => true, () => false);
     await sightCountdown();
-    if (!sight.running) return; // stopped during the countdown
+    if (!(await ready) || !sight.running || sight.round !== round) return; // stopped during the countdown, or no engraver
+    sight.line = first;
+    first.el.classList.add("show");
+    sightScroll(false);
+    $("sight-prompt").textContent = "Play the note on the line";
     startRoundClock(sight, $("sight-bar-fill"), sight.secs, sightFinish);
-    sightNext();
+    sightAsk();
+    sightPrepareNext();
   }
 
   // 3, 2, 1 over the staff, half a second each; the clock starts when it's done
@@ -4460,22 +4575,34 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
     });
   }
 
-  async function sightNext() {
-    const target = sight.target = sightPick();
+  // The note at the play line becomes the question
+  function sightAsk() {
+    const target = sight.target = sight.line.notes[sight.pos];
     sight.idx++;
-    sight.awaiting = false;
     sight.missed = false;
     sight.q = { note: target.midi, name: target.name, clef: target.clef, attempts: 0, firstTry: false, seconds: null, askedAt: null };
     sight.questions.push(sight.q);
     sightClearMisses();
     sightUpdateProgress();
-    const prompt = $("sight-prompt");
-    prompt.className = "ear-prompt";
-    prompt.textContent = "Which note is this?";
-    try { await sightDraw(target); } catch (e) {}
-    if (!sight.running || sight.target !== target) return; // stopped or restarted while drawing
+    sightScroll();
     sight.awaiting = true;
-    sight.q.askedAt = performance.now(); // time from first seeing the note
+    sight.q.askedAt = performance.now(); // time from the note reaching the line
+  }
+
+  // On to the next note; at the end of a line, the one drawn in the wings takes over
+  async function sightAdvance() {
+    sight.pos++;
+    if (sight.pos < sight.line.notes.length) { sightAsk(); return; }
+    const round = sight.round;
+    if (!sight.next) await sight.preparing; // read faster than it could draw: a moment's wait
+    if (!sight.running || sight.round !== round || !sight.next) return;
+    const old = sight.line;
+    Object.assign(sight, { line: sight.next, next: null, pos: 0 });
+    sightScroll(false);
+    old.el.classList.remove("show");
+    sight.line.el.classList.add("show");
+    sightAsk();
+    sightPrepareNext();
   }
 
   // Wrong keys stay red until the question is answered
@@ -4496,16 +4623,19 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
       sightMisses.add(m);
       keyEls[m]?.classList.add("bad");
       prompt.className = "ear-prompt bad";
-      // Show the played note in red beside the question, spelled the same way (flat or sharp).
-      // Too far outside the clef to fit: a red arrow flashes at the staff's top or bottom edge instead.
-      const target = sight.target, [lo, hi] = SIGHT_RANGES[target.clef].ledger;
+      // Show the played note in red beside the question, spelled the same way (flat or sharp): on the question's
+      // staff, or on a grand staff's other staff if only that one reaches it. Too far outside either to fit:
+      // a red arrow flashes at the staff's top or bottom edge instead.
+      const target = sight.target;
       // Simple mode: the octave doesn't matter, so the played note is drawn in the octave nearest the question
       const shown = simple ? m + 12 * Math.round((target.midi - m) / 12) : m;
       const played = sightSpell(shown, target.alter < 0);
       prompt.textContent = `Not ${sightSay(sightNoteName(played))}, try again`;
-      if (shown >= lo && shown <= hi) sightDraw(target, played);
+      const fits = clef => { const [lo, hi] = SIGHT_RANGES[clef].ledger; return shown >= lo && shown <= hi; };
+      const staff = [target.clef, ...(sightGrand() ? sightClefs() : [])].find(fits);
+      if (staff) sightGhost(sight.pos, played, staff);
       else {
-        sightDraw(target); // a red note from an earlier wrong key makes way
+        const lo = Math.min(...(sightGrand() ? sightClefs() : [target.clef]).map(c => SIGHT_RANGES[c].ledger[0]));
         const el = $(shown < lo ? "sight-arrow-down" : "sight-arrow-up");
         el.classList.remove("flash");
         void el.offsetWidth; // restart the flash
@@ -4514,8 +4644,7 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
       return;
     }
     sight.awaiting = false;
-    sight.solved = sight.target;
-    $("sight-staff").classList.add("good");
+    sight.line.heads[sight.pos]?.classList.add("good");
     sight.answered++;
     if (!sight.missed) sight.correct++;
     sight.q.firstTry = !sight.missed;
@@ -4526,7 +4655,7 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
     prompt.className = "ear-prompt good";
     prompt.textContent = (sight.missed ? "Got it, " : "Correct, ") + sightSay(sight.target.name);
     sightUpdateProgress();
-    sightLater(sightNext, 400);
+    sightAdvance();
   }
 
   function sightUpdateProgress() {
@@ -4540,6 +4669,7 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
     sight.awaiting = false;
     sightClearTimers();
     sightClearMisses();
+    sight.line = sight.next = null;
     const { score, questions } = roundResult(sight, sight.secs);
     showRoundScore("sight", score);
     sightShow("done");
@@ -4565,6 +4695,8 @@ ${part("P1", SIGHT_REF.treble)}${part("P2", SIGHT_REF.bass)}</score-partwise>`;
     sightClearTimers();
     clearTimeout(sight.clock);
     $("sight-count").hidden = true;
+    sightLines.forEach(l => l.el.classList.remove("show"));
+    sight.line = sight.next = null;
     sightShow("setup");
   }
 
